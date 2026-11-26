@@ -1,17 +1,16 @@
 import { DUSK_PAPER, TWILIGHT } from './palette';
-import { Sky } from './sky';
+import { Sky, type LinkSpec } from './sky';
 
 const MAX_PIXEL_RATIO = 2;
 const MAX_STEP = 0.05;
 
-export interface SkyLink {
-	text: string;
+export interface SkyLink extends LinkSpec {
 	href: string;
 }
 
 /**
  * Runs the sky on `canvas`, in the palette of the system color scheme, until the returned function is called.
- * Each link is spelled in dots under the wordmark, with a real anchor laid over it in the canvas's parent.
+ * Each link is drawn in the sky, with a real anchor laid over it in the canvas's parent.
  */
 export function mountSky(canvas: HTMLCanvasElement, word = 'birdorbs', links: SkyLink[] = []): () => void {
 	const ctx = canvas.getContext('2d', { alpha: false })!;
@@ -20,7 +19,7 @@ export function mountSky(canvas: HTMLCanvasElement, word = 'birdorbs', links: Sk
 	const sky = new Sky(
 		word,
 		palette(),
-		links.map((link) => link.text)
+		links.map(({ text, mark }) => ({ text, mark }))
 	);
 	let pointed = -1;
 	let focused = -1;

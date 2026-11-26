@@ -1,9 +1,10 @@
 <script lang="ts">
+	import { GITHUB_MARK } from '$lib/sky/marks';
 	import Sky from '$lib/sky/Sky.svelte';
 
 	const links = [
 		{ text: 'quillmark', href: 'https://github.com/birdorbs/quillmark' },
-		{ text: 'github', href: 'https://github.com/birdorbs' }
+		{ text: 'birdorbs on GitHub', href: 'https://github.com/birdorbs', mark: GITHUB_MARK }
 	];
 </script>
 

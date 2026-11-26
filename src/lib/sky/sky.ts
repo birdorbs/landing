@@ -29,8 +29,16 @@ export interface Rect {
 	h: number;
 }
 
+/** A link is spelled in dots, or, given `mark`, drawn as one orb carrying that SVG path from a 16-unit box. */
+export interface LinkSpec {
+	text: string;
+	mark?: string;
+}
+
 interface Link {
 	text: string;
+	/** The orb's radius for a mark link, 0 for a word. */
+	radius: number;
 	rect: Rect;
 	cell: number;
 	borbs: Borb[];
@@ -120,6 +128,7 @@ export class Sky {
 	private flocks: Flock[] = [];
 	private borbs: Borb[] = [];
 	private links: Link[] = [];
+	private marks: Path2D[] = [];
 	private cell = 0;
 	private time = 0;
 	private populated = false;
@@ -130,7 +139,7 @@ export class Sky {
 	constructor(
 		private word: string,
 		private palette: Palette,
-		private linkWords: string[] = []
+		private linkSpecs: LinkSpec[] = []
 	) {}
 
 	get linkRects(): Rect[] {
@@ -189,8 +198,9 @@ export class Sky {
 		if (first) {
 			this.populate();
 			this.borbs = this.hatch(homes, null, 0.3);
-			this.links = placed.map(({ rect, cell, homes }, i) => {
-				const link: Link = { text: this.linkWords[i], rect, cell, borbs: [], hovered: false, glow: 0, percher: null };
+			this.links = placed.map(({ rect, cell, radius, homes }, i) => {
+				const text = this.linkSpecs[i].text;
+				const link: Link = { text, radius, rect, cell, borbs: [], hovered: false, glow: 0, percher: null };
 				link.borbs = this.hatch(homes, link, 1.3 + i * 0.3);
 				return link;
 			});
@@ -199,10 +209,11 @@ export class Sky {
 				this.borbs[i].hx = home.x;
 				this.borbs[i].hy = home.y;
 			});
-			placed.forEach(({ rect, cell, homes }, i) => {
+			placed.forEach(({ rect, cell, radius, homes }, i) => {
 				const link = this.links[i];
 				link.rect = rect;
 				link.cell = cell;
+				link.radius = radius;
 				homes.forEach((home, j) => {
 					link.borbs[j].hx = home.x;
 					link.borbs[j].hy = home.y;
@@ -252,7 +263,11 @@ export class Sky {
 
 		ctx.fillStyle = rgb(this.palette.letters);
 		this.drawBorbs(ctx, this.borbs, this.cell * 0.42, 0.95, dt);
-		for (const link of this.links) {
+		for (const [index, link] of this.links.entries()) {
+			if (link.radius) {
+				this.drawMark(ctx, link, index, dt);
+				continue;
+			}
 			const { glow } = link;
 			let radius = link.cell * 0.42;
 			let alpha = 0.95;
@@ -304,29 +319,73 @@ export class Sky {
 		});
 	}
 
-	/** Links sit along the bottom of the page: side by side on a wide screen, stacked on a tall one. */
+	/**
+	 * Word links sit along the bottom of the page, side by side on a wide screen and stacked on a tall one.
+	 * Mark links are orbs in the bottom right corner.
+	 */
 	private placeLinks(wordCell: number) {
 		const { width, height } = this;
-		const columns = this.linkWords.map(columnsOf);
-		if (!columns.length) return [];
+		const words = this.linkSpecs.filter((spec) => !spec.mark);
+		const columns = words.map((spec) => columnsOf(spec.text));
 		const stacked = height > width;
 		const span = stacked
-			? Math.max(...columns)
+			? Math.max(0, ...columns)
 			: columns.reduce((n, c) => n + c, 0) + LINK_GAP_COLUMNS * (columns.length - 1);
-		const cell = Math.min(wordCell * (stacked ? 0.75 : 0.5), (width * 0.8) / span, 11);
+		const cell = Math.min(wordCell * (stacked ? 0.75 : 0.5), (width * 0.8) / (span || 1), 11);
 		const rows = stacked ? columns.length * (ROWS + 3) - 3 : ROWS;
 		const top = height - Math.max(36, height * 0.08) - (rows - 0.5) * cell;
 		let left = (width - (span - 1) * cell) / 2;
-		return this.linkWords.map((word, i) => {
+
+		const radius = Math.max(16, Math.min(24, Math.min(width, height) * 0.035));
+		const margin = Math.max(20, Math.min(width, height) * 0.04);
+		let orbX = width - margin - radius;
+
+		let word = 0;
+		return this.linkSpecs.map((spec) => {
+			if (spec.mark) {
+				const home = { x: orbX, y: height - margin - radius };
+				orbX -= radius * 2 + 16;
+				const reach = radius + 8;
+				return {
+					cell: radius * 0.4,
+					radius,
+					homes: [home],
+					rect: { x: home.x - reach, y: home.y - reach, w: reach * 2, h: reach * 2 }
+				};
+			}
+			const i = word++;
 			const x = stacked ? (width - (columns[i] - 1) * cell) / 2 : left;
 			const y = stacked ? top + i * (ROWS + 3) * cell : top;
 			left += (columns[i] + LINK_GAP_COLUMNS) * cell;
 			return {
 				cell,
-				homes: placeWord(word, x, y, cell),
+				radius: 0,
+				homes: placeWord(spec.text, x, y, cell),
 				rect: { x: x - cell, y: y - cell, w: (columns[i] + 1) * cell, h: (ROWS + 1) * cell }
 			};
 		});
+	}
+
+	private drawMark(ctx: CanvasRenderingContext2D, link: Link, index: number, dt: number) {
+		const b = link.borbs[0];
+		const ruffle = this.linkStyle === 'ruffle' || this.linkStyle === 'flow' ? link.glow : 0;
+		const radius = link.radius * (1 + 0.22 * ruffle);
+		if (b.flight > 0.02) {
+			b.flap += dt / 0.14;
+			ctx.globalAlpha = flapAlpha(b.flap) * b.flight * 0.85;
+			wings(ctx, b.x, b.y, radius * 2.4, b.heading, 40 * DEG, 130 * DEG);
+		}
+		if (ruffle > 0.02) {
+			ctx.globalAlpha = flapAlpha(this.time * 9 + b.seed) * ruffle * 0.5;
+			wings(ctx, b.x, b.y, radius * 1.9, -90 * DEG, 50 * DEG, 110 * DEG);
+		}
+		const path = (this.marks[index] ??= new Path2D(this.linkSpecs[index].mark));
+		ctx.globalAlpha = 1;
+		ctx.save();
+		ctx.translate(b.x - radius, b.y - radius);
+		ctx.scale(radius / 8, radius / 8);
+		ctx.fill(path);
+		ctx.restore();
 	}
 
 	private callPercher(link: Link) {
