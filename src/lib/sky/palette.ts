@@ -13,20 +13,39 @@ export interface Palette {
 	butterflies: { hue: Range; saturation: Range; lightness: Range };
 }
 
-export const DUSK: Palette = {
+export const TWILIGHT: Palette = {
 	sky: [
-		[50, 40, 60],
-		[50, 40, 60]
+		[30, 25, 46],
+		[66, 46, 68]
 	],
-	moon: [220, 231, 191, 190],
-	letters: [220, 231, 191],
+	moon: [246, 212, 208, 205],
+	letters: [242, 234, 216],
 	birds: {
-		bats: [22, 16, 30, 255],
-		spirits: [200, 170, 200, 70],
-		hummingbirds: [112, 134, 214, 255],
-		cardinals: [212, 98, 96, 255],
-		budgerigars: [128, 188, 152, 255],
-		doves: [255, 168, 188, 255]
+		bats: [18, 14, 28, 255],
+		spirits: [196, 176, 214, 60],
+		hummingbirds: [152, 142, 212, 255],
+		cardinals: [202, 114, 132, 255],
+		budgerigars: [228, 172, 130, 255],
+		doves: [255, 190, 200, 255]
 	},
-	butterflies: { hue: [250, 400], saturation: [35, 70], lightness: [55, 78] }
+	butterflies: { hue: [285, 390], saturation: [25, 50], lightness: [60, 78] }
+};
+
+/** The wordmark is the darkest thing on the page, so birds crossing it never hide it. */
+export const DUSK_PAPER: Palette = {
+	sky: [
+		[235, 233, 240],
+		[247, 233, 227]
+	],
+	moon: [247, 224, 202, 255],
+	letters: [38, 30, 50],
+	birds: {
+		bats: [126, 115, 146, 255],
+		spirits: [70, 56, 90, 30],
+		hummingbirds: [160, 152, 216, 255],
+		cardinals: [222, 148, 166, 255],
+		budgerigars: [236, 188, 148, 255],
+		doves: [226, 70, 58, 255]
+	},
+	butterflies: { hue: [285, 390], saturation: [30, 50], lightness: [62, 76] }
 };

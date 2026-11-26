@@ -1,5 +1,5 @@
 import { layoutWord } from './letters';
-import { DUSK, type Palette, type Rgb, type Rgba } from './palette';
+import type { Palette, Rgb, Rgba } from './palette';
 import { BUTTERFLIES, BUTTERFLY_LOOK, FLOCKS, REFERENCE_AREA, type FlockSpec, type Look, type Species } from './scene';
 
 const DEG = Math.PI / 180;
@@ -101,7 +101,7 @@ export class Sky {
 
 	constructor(
 		private word: string,
-		private palette: Palette = DUSK
+		private palette: Palette
 	) {}
 
 	paint(palette: Palette) {
