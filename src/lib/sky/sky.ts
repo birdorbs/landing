@@ -11,6 +11,9 @@ const CURSOR_WEIGHT = 700;
 
 const BORB_SPEED = 420;
 const BORB_ARRIVE = 5;
+/** A link's dots shy from the cursor as the title's do, at this share of the push and of the reach. */
+const LINK_SHYNESS = 0.11;
+const LINK_CURSOR_REACH = 0.45;
 
 const LINK_GAP_COLUMNS = 8;
 const GATHER_REACH = 3.2;
@@ -293,7 +296,7 @@ export class Sky {
 			const { glow } = link;
 			let radius = link.cell * 0.42;
 			let alpha = 0.95;
-			if (this.linkStyle === 'ruffle' || this.linkStyle === 'flow') {
+			if (this.linkStyle === 'ruffle') {
 				radius *= 1 + 0.3 * glow;
 				if (glow > 0.02) {
 					for (const b of link.borbs) {
@@ -506,7 +509,7 @@ export class Sky {
 	private restOffset(b: Borb): Point {
 		const t = this.time;
 		const link = b.link;
-		if (link && (this.linkStyle === 'ruffle' || this.linkStyle === 'flow')) {
+		if (link && this.linkStyle === 'ruffle') {
 			const reach = link.cell * 0.2 * link.glow;
 			return { x: Math.cos(t * 13 + b.seed) * reach, y: Math.sin(t * 17 + b.seed * 2) * reach };
 		}
@@ -818,15 +821,17 @@ export class Sky {
 			rate = BORB_ARRIVE;
 		}
 
-		const cursor = b.link ? null : this.cursor;
-		if (cursor) {
+		const shy = b.link ? (this.linkStyle === 'flow' ? LINK_SHYNESS : 0) : 1;
+		const { cursor } = this;
+		if (cursor && shy) {
+			const reach = CURSOR_RADIUS * (b.link ? LINK_CURSOR_REACH : 1);
 			const dx = b.x - cursor.x;
 			const dy = b.y - cursor.y;
 			const dist = Math.hypot(dx, dy);
-			if (dist < CURSOR_RADIUS && dist > 0) {
-				const closeness = 1 - dist / CURSOR_RADIUS;
-				tx += (dx / dist) * 580 * closeness;
-				ty += (dy / dist) * 580 * closeness;
+			if (dist < reach && dist > 0) {
+				const closeness = 1 - dist / reach;
+				tx += (dx / dist) * 580 * shy * closeness;
+				ty += (dy / dist) * 580 * shy * closeness;
 				rate += 6 * closeness;
 			}
 		}
