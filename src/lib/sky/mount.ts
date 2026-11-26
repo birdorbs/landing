@@ -49,11 +49,6 @@ export function mountSky(canvas: HTMLCanvasElement, word = 'birdorbs'): () => vo
 	};
 	const onMove = (e: PointerEvent) => (sky.cursor = local(e));
 	const onLeave = () => (sky.cursor = null);
-	const onDown = (e: PointerEvent) => {
-		const point = local(e);
-		sky.cursor = point;
-		sky.startle(point.x, point.y);
-	};
 	const onUp = (e: PointerEvent) => {
 		if (e.pointerType !== 'mouse') sky.cursor = null;
 	};
@@ -67,7 +62,7 @@ export function mountSky(canvas: HTMLCanvasElement, word = 'birdorbs'): () => vo
 	canvas.addEventListener('pointermove', onMove);
 	canvas.addEventListener('pointerleave', onLeave);
 	canvas.addEventListener('pointercancel', onLeave);
-	canvas.addEventListener('pointerdown', onDown);
+	canvas.addEventListener('pointerdown', onMove);
 	canvas.addEventListener('pointerup', onUp);
 	document.addEventListener('visibilitychange', run);
 	still.addEventListener('change', onMotion);
@@ -80,7 +75,7 @@ export function mountSky(canvas: HTMLCanvasElement, word = 'birdorbs'): () => vo
 		canvas.removeEventListener('pointermove', onMove);
 		canvas.removeEventListener('pointerleave', onLeave);
 		canvas.removeEventListener('pointercancel', onLeave);
-		canvas.removeEventListener('pointerdown', onDown);
+		canvas.removeEventListener('pointerdown', onMove);
 		canvas.removeEventListener('pointerup', onUp);
 		document.removeEventListener('visibilitychange', run);
 		still.removeEventListener('change', onMotion);

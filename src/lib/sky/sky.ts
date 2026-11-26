@@ -15,17 +15,11 @@ const DEG = Math.PI / 180;
 const TAU = Math.PI * 2;
 
 const TRAIL = 100 / 255;
-const CLICK_RING_DURATION = 0.85;
-const CLICK_RING_SIZE = 300;
-const EVASION_RADIUS = 200;
-const EVASION_DURATION = 2;
-const EVASION_WEIGHT = 800;
 const CURSOR_RADIUS = 130;
 const CURSOR_WEIGHT = 700;
 
 const BORB_SPEED = 420;
 const BORB_ARRIVE = 5;
-const BORB_SCATTER_RADIUS = 260;
 
 const rand = (min: number, max: number) => min + Math.random() * (max - min);
 const randInt = (min: number, max: number) => Math.floor(rand(min, max + 1));
@@ -105,9 +99,6 @@ export class Sky {
 	private flocks: Flock[] = [];
 	private borbs: Borb[] = [];
 	private cell = 0;
-	private scare: Point | null = null;
-	private scareTimer = 0;
-	private ringTimer = 0;
 	private time = 0;
 	private populated = false;
 	private scale = 1;
@@ -165,22 +156,6 @@ export class Sky {
 		}
 	}
 
-	startle(x: number, y: number) {
-		this.scare = { x, y };
-		this.scareTimer = EVASION_DURATION;
-		this.ringTimer = CLICK_RING_DURATION;
-		for (const b of this.borbs) {
-			const dx = b.x - x;
-			const dy = b.y - y;
-			const dist = Math.hypot(dx, dy) || 1;
-			if (dist >= BORB_SCATTER_RADIUS) continue;
-			const closeness = 1 - dist / BORB_SCATTER_RADIUS;
-			b.vx += (dx / dist) * 520 * closeness;
-			b.vy += (dy / dist) * 520 * closeness;
-			b.roam = Math.max(b.roam, 0.2 + closeness * rand(0.3, 0.9));
-		}
-	}
-
 	step(dt: number) {
 		this.time += dt;
 		this.stepMoon(dt);
@@ -188,23 +163,12 @@ export class Sky {
 		for (const flock of this.flocks) this.steer(flock, dt);
 		for (const flock of this.flocks) for (const b of flock.boids) this.move(b, dt);
 		for (const b of this.borbs) this.stepBorb(b, dt);
-		this.scareTimer -= dt;
 	}
 
 	draw(ctx: CanvasRenderingContext2D, dt: number, clear = false) {
 		ctx.globalAlpha = clear ? 1 : 1 - Math.pow(1 - TRAIL, dt * 60);
 		ctx.fillStyle = rgb(BACKGROUND);
 		ctx.fillRect(0, 0, this.width, this.height);
-
-		if (this.ringTimer > 0) {
-			const progress = this.ringTimer / CLICK_RING_DURATION;
-			ctx.globalAlpha = (150 / 255) * progress;
-			ctx.fillStyle = 'rgb(100,100,100)';
-			ctx.beginPath();
-			ctx.arc(this.scare!.x, this.scare!.y, (CLICK_RING_SIZE * (1 - progress)) / 2, 0, TAU);
-			ctx.fill();
-			this.ringTimer -= dt;
-		}
 
 		const moon = this.moon;
 		const moonAlpha = MOON[3] / 255;
@@ -343,7 +307,6 @@ export class Sky {
 
 	private steer(flock: Flock, dt: number) {
 		const { boids, speed } = flock;
-		const scare = this.scareTimer > 0 ? this.scare : null;
 		const cursor = this.cursor;
 		const next = new Float64Array(boids.length * 2);
 
@@ -351,77 +314,68 @@ export class Sky {
 			const b = boids[i];
 			let sx: number;
 			let sy: number;
-			let weight: number;
+			let weight = flock.alignmentWeight + flock.cohesionWeight + flock.separationWeight;
+			let ax = 0;
+			let ay = 0;
+			let cx = 0;
+			let cy = 0;
+			let near = 0;
+			let px = 0;
+			let py = 0;
+			for (const o of boids) {
+				const dx = b.x - o.x;
+				const dy = b.y - o.y;
+				const dist = Math.hypot(dx, dy);
+				if (dist < flock.alignmentRadius) {
+					ax += o.vx;
+					ay += o.vy;
+				}
+				if (dist < flock.cohesionRadius) {
+					cx += o.x;
+					cy += o.y;
+					near++;
+				}
+				if (dist < flock.separationRadius) {
+					const closeness = (1 - (dist * dist) / (flock.separationRadius * flock.separationRadius)) * speed;
+					px += dx * closeness;
+					py += dy * closeness;
+				}
+			}
+			const alignment = Math.hypot(ax, ay) || 1;
+			cx = cx / near - b.x;
+			cy = cy / near - b.y;
+			const cohesion = Math.hypot(cx, cy) || 1;
+			const separation = Math.max(1, Math.hypot(px, py));
 
-			const scareDist = scare ? Math.hypot(b.x - scare.x, b.y - scare.y) : Infinity;
-			if (scare && scareDist < EVASION_RADIUS) {
-				sx = scareDist ? ((b.x - scare.x) / scareDist) * speed : speed;
-				sy = scareDist ? ((b.y - scare.y) / scareDist) * speed : 0;
-				weight = EVASION_WEIGHT;
+			sx =
+				(ax / alignment) * flock.alignmentWeight +
+				(cx / cohesion) * flock.cohesionWeight +
+				(px / separation) * flock.separationWeight;
+			sy =
+				(ay / alignment) * flock.alignmentWeight +
+				(cy / cohesion) * flock.cohesionWeight +
+				(py / separation) * flock.separationWeight;
+
+			if (cursor) {
+				const dx = b.x - cursor.x;
+				const dy = b.y - cursor.y;
+				const dist = Math.hypot(dx, dy);
+				if (dist < CURSOR_RADIUS && dist > 0) {
+					const push = CURSOR_WEIGHT * (1 - dist / CURSOR_RADIUS);
+					sx += (dx / dist) * push;
+					sy += (dy / dist) * push;
+					weight += push;
+				}
+			}
+
+			const steering = Math.hypot(sx, sy);
+			if (steering > 0) {
+				sx = (sx / steering) * speed;
+				sy = (sy / steering) * speed;
 			} else {
-				weight = flock.alignmentWeight + flock.cohesionWeight + flock.separationWeight;
-				let ax = 0;
-				let ay = 0;
-				let cx = 0;
-				let cy = 0;
-				let near = 0;
-				let px = 0;
-				let py = 0;
-				for (const o of boids) {
-					const dx = b.x - o.x;
-					const dy = b.y - o.y;
-					const dist = Math.hypot(dx, dy);
-					if (dist < flock.alignmentRadius) {
-						ax += o.vx;
-						ay += o.vy;
-					}
-					if (dist < flock.cohesionRadius) {
-						cx += o.x;
-						cy += o.y;
-						near++;
-					}
-					if (dist < flock.separationRadius) {
-						const closeness = (1 - (dist * dist) / (flock.separationRadius * flock.separationRadius)) * speed;
-						px += dx * closeness;
-						py += dy * closeness;
-					}
-				}
-				const alignment = Math.hypot(ax, ay) || 1;
-				cx = cx / near - b.x;
-				cy = cy / near - b.y;
-				const cohesion = Math.hypot(cx, cy) || 1;
-				const separation = Math.max(1, Math.hypot(px, py));
-
-				sx =
-					(ax / alignment) * flock.alignmentWeight +
-					(cx / cohesion) * flock.cohesionWeight +
-					(px / separation) * flock.separationWeight;
-				sy =
-					(ay / alignment) * flock.alignmentWeight +
-					(cy / cohesion) * flock.cohesionWeight +
-					(py / separation) * flock.separationWeight;
-
-				if (cursor) {
-					const dx = b.x - cursor.x;
-					const dy = b.y - cursor.y;
-					const dist = Math.hypot(dx, dy);
-					if (dist < CURSOR_RADIUS && dist > 0) {
-						const push = CURSOR_WEIGHT * (1 - dist / CURSOR_RADIUS);
-						sx += (dx / dist) * push;
-						sy += (dy / dist) * push;
-						weight += push;
-					}
-				}
-
-				const steering = Math.hypot(sx, sy);
-				if (steering > 0) {
-					sx = (sx / steering) * speed;
-					sy = (sy / steering) * speed;
-				} else {
-					const current = Math.hypot(b.vx, b.vy) || 1;
-					sx = (b.vx / current) * speed;
-					sy = (b.vy / current) * speed;
-				}
+				const current = Math.hypot(b.vx, b.vy) || 1;
+				sx = (b.vx / current) * speed;
+				sy = (b.vy / current) * speed;
 			}
 
 			const lerp = (weight / (weight + flock.currentVelocityWeight)) * dt;
