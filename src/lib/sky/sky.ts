@@ -128,6 +128,18 @@ function disc(ctx: CanvasRenderingContext2D, x: number, y: number, r: number) {
 	ctx.fill();
 }
 
+const UP = -Math.PI / 2;
+const MARK_GAP = 70 * DEG;
+const MARK_ROCK = 14 * DEG;
+
+/** One wing wrapped around a mark, open at the front to show which way it faces. */
+function collar(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, facing: number) {
+	ctx.beginPath();
+	ctx.moveTo(x, y);
+	ctx.arc(x, y, r, facing + MARK_GAP / 2, facing + TAU - MARK_GAP / 2);
+	ctx.fill();
+}
+
 function flapAlpha(flap: number) {
 	const t = flap % 2;
 	return (t > 1 ? 2 - t : t) * FLAP_PEAK;
@@ -387,21 +399,25 @@ export class Sky {
 		const b = link.borbs[0];
 		const ruffle = this.linkStyle === 'ruffle' || this.linkStyle === 'flow' ? link.glow : 0;
 		const radius = link.radius * (1 + 0.22 * ruffle);
+		const turn = Math.atan2(Math.sin(b.heading - UP), Math.cos(b.heading - UP)) * Math.min(1, b.flight);
+		const facing = UP + turn + Math.sin(this.time * 5 + b.seed) * MARK_ROCK * ruffle;
 		ctx.fillStyle = rgb(this.linkSpecs[index].brand ? this.palette.mark : this.palette.letters);
 		if (b.flight > 0.02) {
 			b.flap += dt / 0.14;
 			ctx.globalAlpha = flapAlpha(b.flap) * b.flight * 0.85;
-			disc(ctx, b.x, b.y, radius * 1.6);
+			collar(ctx, b.x, b.y, radius * 1.6, facing);
 		}
 		if (ruffle > 0.02) {
 			ctx.globalAlpha = flapAlpha(this.time * 9 + b.seed) * ruffle * 0.5;
-			disc(ctx, b.x, b.y, radius * 1.4);
+			collar(ctx, b.x, b.y, radius * 1.4, facing);
 		}
 		const path = (this.marks[index] ??= new Path2D(this.linkSpecs[index].mark));
 		ctx.globalAlpha = 1;
 		ctx.save();
-		ctx.translate(b.x - radius, b.y - radius);
+		ctx.translate(b.x, b.y);
+		ctx.rotate(facing - UP);
 		ctx.scale(radius / 8, radius / 8);
+		ctx.translate(-8, -8);
 		ctx.fill(path, 'evenodd');
 		ctx.restore();
 		ctx.fillStyle = rgb(this.palette.letters);
