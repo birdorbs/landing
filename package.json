@@ -1,0 +1,22 @@
+{
+	"name": "birdorbs-landing",
+	"version": "0.0.1",
+	"private": true,
+	"license": "Apache-2.0",
+	"type": "module",
+	"scripts": {
+		"dev": "vite dev",
+		"build": "vite build",
+		"preview": "vite preview",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
+	},
+	"devDependencies": {
+		"@sveltejs/adapter-static": "^3.0.7",
+		"@sveltejs/kit": "^2.15.7",
+		"@sveltejs/vite-plugin-svelte": "^5.0.4",
+		"svelte": "^5.17.0",
+		"svelte-check": "^4.1.3",
+		"typescript": "^5.7.2",
+		"vite": "^6.0.5"
+	}
+}
