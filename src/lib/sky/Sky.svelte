@@ -1,9 +1,10 @@
 <script lang="ts">
-	import { mountSky } from './mount';
+	import { mountSky, type SkyLink } from './mount';
 
+	let { links = [] }: { links?: SkyLink[] } = $props();
 	let canvas: HTMLCanvasElement;
 
-	$effect(() => mountSky(canvas));
+	$effect(() => mountSky(canvas, 'birdorbs', links));
 </script>
 
 <canvas bind:this={canvas} aria-hidden="true"></canvas>

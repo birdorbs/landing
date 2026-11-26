@@ -4,12 +4,37 @@ import { Sky } from './sky';
 const MAX_PIXEL_RATIO = 2;
 const MAX_STEP = 0.05;
 
-/** Runs the sky on `canvas`, in the palette of the system color scheme, until the returned function is called. */
-export function mountSky(canvas: HTMLCanvasElement, word = 'birdorbs'): () => void {
+export interface SkyLink {
+	text: string;
+	href: string;
+}
+
+/**
+ * Runs the sky on `canvas`, in the palette of the system color scheme, until the returned function is called.
+ * Each link is spelled in dots under the wordmark, with a real anchor laid over it in the canvas's parent.
+ */
+export function mountSky(canvas: HTMLCanvasElement, word = 'birdorbs', links: SkyLink[] = []): () => void {
 	const ctx = canvas.getContext('2d', { alpha: false })!;
 	const light = matchMedia('(prefers-color-scheme: light)');
 	const palette = () => (light.matches ? DUSK_PAPER : TWILIGHT);
-	const sky = new Sky(word, palette());
+	const sky = new Sky(
+		word,
+		palette(),
+		links.map((link) => link.text)
+	);
+	const anchors = links.map(({ text, href }, i) => {
+		const anchor = document.createElement('a');
+		anchor.href = href;
+		anchor.setAttribute('aria-label', text);
+		anchor.style.cssText = 'position:absolute;border-radius:8px';
+		anchor.addEventListener('pointerenter', () => sky.hover(i, true));
+		anchor.addEventListener('pointerleave', () => sky.hover(i, false));
+		anchor.addEventListener('focus', () => sky.hover(i, true));
+		anchor.addEventListener('blur', () => sky.hover(i, false));
+		anchor.addEventListener('click', () => sky.press(i));
+		canvas.parentElement!.append(anchor);
+		return anchor;
+	});
 	const still = matchMedia('(prefers-reduced-motion: reduce)');
 	let frame = 0;
 	let last = 0;
@@ -23,6 +48,13 @@ export function mountSky(canvas: HTMLCanvasElement, word = 'birdorbs'): () => vo
 		canvas.height = Math.round(height * ratio);
 		ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
 		sky.resize(width, height);
+		sky.linkRects.forEach((rect, i) => {
+			const { style } = anchors[i];
+			style.left = `${canvas.offsetLeft + rect.x}px`;
+			style.top = `${canvas.offsetTop + rect.y}px`;
+			style.width = `${rect.w}px`;
+			style.height = `${rect.h}px`;
+		});
 		clear = true;
 		if (still.matches) {
 			sky.settle();
@@ -66,11 +98,11 @@ export function mountSky(canvas: HTMLCanvasElement, word = 'birdorbs'): () => vo
 
 	const observer = new ResizeObserver(fit);
 	observer.observe(canvas);
-	canvas.addEventListener('pointermove', onMove);
-	canvas.addEventListener('pointerleave', onLeave);
-	canvas.addEventListener('pointercancel', onLeave);
-	canvas.addEventListener('pointerdown', onMove);
-	canvas.addEventListener('pointerup', onUp);
+	addEventListener('pointermove', onMove);
+	document.documentElement.addEventListener('pointerleave', onLeave);
+	addEventListener('pointercancel', onLeave);
+	addEventListener('pointerdown', onMove);
+	addEventListener('pointerup', onUp);
 	document.addEventListener('visibilitychange', run);
 	still.addEventListener('change', onMotion);
 	light.addEventListener('change', onScheme);
@@ -80,11 +112,12 @@ export function mountSky(canvas: HTMLCanvasElement, word = 'birdorbs'): () => vo
 	return () => {
 		cancelAnimationFrame(frame);
 		observer.disconnect();
-		canvas.removeEventListener('pointermove', onMove);
-		canvas.removeEventListener('pointerleave', onLeave);
-		canvas.removeEventListener('pointercancel', onLeave);
-		canvas.removeEventListener('pointerdown', onMove);
-		canvas.removeEventListener('pointerup', onUp);
+		for (const anchor of anchors) anchor.remove();
+		removeEventListener('pointermove', onMove);
+		document.documentElement.removeEventListener('pointerleave', onLeave);
+		removeEventListener('pointercancel', onLeave);
+		removeEventListener('pointerdown', onMove);
+		removeEventListener('pointerup', onUp);
 		document.removeEventListener('visibilitychange', run);
 		still.removeEventListener('change', onMotion);
 		light.removeEventListener('change', onScheme);

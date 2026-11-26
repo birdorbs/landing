@@ -1,4 +1,4 @@
-import { layoutWord } from './letters';
+import { ROWS, columnsOf, layoutWord, placeWord, type Point } from './letters';
 import type { Palette, Rgb, Rgba } from './palette';
 import { BUTTERFLIES, BUTTERFLY_LOOK, FLOCKS, REFERENCE_AREA, type FlockSpec, type Look, type Species } from './scene';
 
@@ -11,6 +11,32 @@ const CURSOR_WEIGHT = 700;
 
 const BORB_SPEED = 420;
 const BORB_ARRIVE = 5;
+
+const LINK_GAP_COLUMNS = 8;
+const GATHER_REACH = 3.2;
+const GATHER_WEIGHT = 900;
+const PERCHERS: Species[] = ['hummingbirds', 'cardinals', 'budgerigars', 'doves'];
+
+/** What a link's letters and the birds around it do while the link is hovered or focused. */
+export type LinkStyle = 'ruffle' | 'perch' | 'gather' | 'hop' | 'tighten';
+
+export interface Rect {
+	x: number;
+	y: number;
+	w: number;
+	h: number;
+}
+
+interface Link {
+	text: string;
+	rect: Rect;
+	cell: number;
+	borbs: Borb[];
+	hovered: boolean;
+	/** Eases toward 1 while hovered and back to 0 after. */
+	glow: number;
+	percher: Boid | null;
+}
 
 const rand = (min: number, max: number) => min + Math.random() * (max - min);
 const randInt = (min: number, max: number) => Math.floor(rand(min, max + 1));
@@ -32,6 +58,8 @@ interface Boid {
 	phase: boolean;
 	/** Where this bird falls in each of the palette's butterfly ranges. */
 	tint: [number, number, number];
+	/** Set while the bird is flying to, or sitting on, a hovered link. */
+	perch: Point | null;
 }
 
 interface Flock {
@@ -60,11 +88,9 @@ interface Borb {
 	flight: number;
 	flap: number;
 	seed: number;
-}
-
-interface Point {
-	x: number;
-	y: number;
+	link: Link | null;
+	/** A link dot that has reached its home holds its place exactly from then on. */
+	landed: boolean;
 }
 
 function wings(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, heading: number, start: number, arc: number) {
@@ -87,11 +113,13 @@ export class Sky {
 	width = 0;
 	height = 0;
 	cursor: Point | null = null;
+	linkStyle: LinkStyle = 'tighten';
 
 	private moon = { x: 0, y: 0, vx: 0, vy: 0, size: 0, halo: rand(0.3, 0.6) };
 	private butterflies: Boid[] = [];
 	private flocks: Flock[] = [];
 	private borbs: Borb[] = [];
+	private links: Link[] = [];
 	private cell = 0;
 	private time = 0;
 	private populated = false;
@@ -101,8 +129,30 @@ export class Sky {
 
 	constructor(
 		private word: string,
-		private palette: Palette
+		private palette: Palette,
+		private linkWords: string[] = []
 	) {}
+
+	get linkRects(): Rect[] {
+		return this.links.map((link) => link.rect);
+	}
+
+	hover(index: number, on: boolean) {
+		const link = this.links[index];
+		link.hovered = on;
+		if (this.linkStyle !== 'perch') return;
+		if (on) this.callPercher(link);
+		else this.release(link, 1.1);
+	}
+
+	press(index: number) {
+		this.release(this.links[index], 2);
+	}
+
+	setLinkStyle(style: LinkStyle) {
+		for (const link of this.links) this.release(link, 1.1);
+		this.linkStyle = style;
+	}
 
 	paint(palette: Palette) {
 		this.palette = palette;
@@ -135,40 +185,39 @@ export class Sky {
 
 		const { cell, homes } = layoutWord(this.word, width, height);
 		this.cell = cell;
+		const placed = this.placeLinks(cell);
 		if (first) {
 			this.populate();
-			const left = homes[0].x;
-			const span = homes[homes.length - 1].x - left || 1;
-			this.borbs = homes.map((home) => {
-				const angle = rand(0, TAU);
-				return {
-					x: rand(0, width),
-					y: rand(0, height),
-					vx: Math.cos(angle) * 160,
-					vy: Math.sin(angle) * 160,
-					hx: home.x,
-					hy: home.y,
-					roam: 0.3 + (0.9 * (home.x - left)) / span + rand(0, 0.3),
-					heading: angle,
-					flight: 1,
-					flap: rand(0, 10),
-					seed: rand(0, TAU)
-				};
+			this.borbs = this.hatch(homes, null, 0.3);
+			this.links = placed.map(({ rect, cell, homes }, i) => {
+				const link: Link = { text: this.linkWords[i], rect, cell, borbs: [], hovered: false, glow: 0, percher: null };
+				link.borbs = this.hatch(homes, link, 1.3 + i * 0.3);
+				return link;
 			});
 		} else {
 			homes.forEach((home, i) => {
 				this.borbs[i].hx = home.x;
 				this.borbs[i].hy = home.y;
 			});
+			placed.forEach(({ rect, cell, homes }, i) => {
+				const link = this.links[i];
+				link.rect = rect;
+				link.cell = cell;
+				homes.forEach((home, j) => {
+					link.borbs[j].hx = home.x;
+					link.borbs[j].hy = home.y;
+				});
+			});
 		}
 	}
 
 	/** Puts the wordmark at rest, for a still frame. */
 	settle() {
-		for (const b of this.borbs) {
+		for (const b of this.everyBorb()) {
 			b.x = b.hx;
 			b.y = b.hy;
 			b.vx = b.vy = b.roam = b.flight = 0;
+			b.landed = true;
 		}
 	}
 
@@ -178,7 +227,8 @@ export class Sky {
 		for (const b of this.butterflies) this.stepButterfly(b, dt);
 		for (const flock of this.flocks) this.steer(flock, dt);
 		for (const flock of this.flocks) for (const b of flock.boids) this.move(b, dt);
-		for (const b of this.borbs) this.stepBorb(b, dt);
+		for (const link of this.links) link.glow += ((link.hovered ? 1 : 0) - link.glow) * Math.min(1, 9 * dt);
+		for (const b of this.everyBorb()) this.stepBorb(b, dt);
 	}
 
 	draw(ctx: CanvasRenderingContext2D, dt: number, clear = false) {
@@ -201,20 +251,178 @@ export class Sky {
 		for (const b of this.butterflies) this.drawBoid(ctx, b, dt);
 		for (const flock of this.flocks) for (const b of flock.boids) this.drawBoid(ctx, b, dt);
 
-		const radius = this.cell * 0.42;
 		ctx.fillStyle = rgb(this.palette.letters);
-		for (const b of this.borbs) {
+		this.drawBorbs(ctx, this.borbs, this.cell * 0.42, 0.95, dt);
+		for (const link of this.links) {
+			const { glow } = link;
+			let radius = link.cell * 0.42;
+			let alpha = 0.95;
+			if (this.linkStyle === 'ruffle') {
+				radius *= 1 + 0.3 * glow;
+				if (glow > 0.02) {
+					for (const b of link.borbs) {
+						ctx.globalAlpha = flapAlpha(this.time * 9 + b.seed) * glow * 0.5;
+						wings(ctx, b.x, b.y, radius * 2.1, -90 * DEG, 50 * DEG, 110 * DEG);
+					}
+				}
+			} else if (this.linkStyle === 'tighten') {
+				radius *= 0.8 + 0.2 * glow;
+				alpha = 0.55 + 0.4 * glow;
+			}
+			this.drawBorbs(ctx, link.borbs, radius, alpha, dt);
+		}
+		ctx.globalAlpha = 1;
+	}
+
+	private *everyBorb() {
+		yield* this.borbs;
+		for (const link of this.links) yield* link.borbs;
+	}
+
+	private get hovering() {
+		return this.links.some((link) => link.hovered);
+	}
+
+	private hatch(homes: Point[], link: Link | null, delay: number): Borb[] {
+		const left = homes[0].x;
+		const span = homes[homes.length - 1].x - left || 1;
+		return homes.map((home) => {
+			const angle = rand(0, TAU);
+			return {
+				x: rand(0, this.width),
+				y: rand(0, this.height),
+				vx: Math.cos(angle) * 160,
+				vy: Math.sin(angle) * 160,
+				hx: home.x,
+				hy: home.y,
+				roam: delay + (0.9 * (home.x - left)) / span + rand(0, 0.3),
+				heading: angle,
+				flight: 1,
+				flap: rand(0, 10),
+				seed: rand(0, TAU),
+				link,
+				landed: false
+			};
+		});
+	}
+
+	/** Links sit under the wordmark: side by side on a wide screen, stacked on a tall one. */
+	private placeLinks(wordCell: number) {
+		const { width, height } = this;
+		const columns = this.linkWords.map(columnsOf);
+		if (!columns.length) return [];
+		const stacked = height > width;
+		const span = stacked
+			? Math.max(...columns)
+			: columns.reduce((n, c) => n + c, 0) + LINK_GAP_COLUMNS * (columns.length - 1);
+		const cell = Math.min(wordCell * (stacked ? 0.75 : 0.5), (width * 0.8) / span, 11);
+		const top = height * 0.56 + 3 * wordCell + Math.max(26, 2.4 * wordCell);
+		let left = (width - (span - 1) * cell) / 2;
+		return this.linkWords.map((word, i) => {
+			const x = stacked ? (width - (columns[i] - 1) * cell) / 2 : left;
+			const y = stacked ? top + i * (ROWS + 3) * cell : top;
+			left += (columns[i] + LINK_GAP_COLUMNS) * cell;
+			return {
+				cell,
+				homes: placeWord(word, x, y, cell),
+				rect: { x: x - cell, y: y - cell, w: (columns[i] + 1) * cell, h: (ROWS + 1) * cell }
+			};
+		});
+	}
+
+	private callPercher(link: Link) {
+		if (link.percher) return;
+		const cx = link.rect.x + link.rect.w / 2;
+		const cy = link.rect.y + link.rect.h / 2;
+		let best: Boid | null = null;
+		let bestDist = Infinity;
+		for (const flock of this.flocks) {
+			if (!PERCHERS.includes(flock.species)) continue;
+			for (const b of flock.boids) {
+				const dist = Math.hypot(b.x - cx, b.y - cy);
+				if (!b.perch && dist < bestDist) {
+					best = b;
+					bestDist = dist;
+				}
+			}
+		}
+		if (!best) return;
+		const top = Math.min(...link.borbs.map((b) => b.hy));
+		const seat = link.borbs
+			.filter((b) => b.hy === top)
+			.reduce((a, b) => (Math.abs(b.hx - cx) < Math.abs(a.hx - cx) ? b : a));
+		best.perch = { x: seat.hx, y: seat.hy - link.cell * 0.42 - best.size };
+		link.percher = best;
+	}
+
+	private release(link: Link, vigor: number) {
+		const bird = link.percher;
+		if (!bird) return;
+		bird.perch = null;
+		bird.vx = rand(-0.7, 0.7) * 160 * vigor;
+		bird.vy = -160 * vigor;
+		link.percher = null;
+	}
+
+	/** While a link is hovered in the gather style, the pull that bends a bird at (x, y) into orbit around it. */
+	private gather(x: number, y: number): { x: number; y: number; weight: number } | null {
+		if (this.linkStyle !== 'gather') return null;
+		for (const { rect, glow } of this.links) {
+			if (glow < 0.05) continue;
+			const rx = rect.w / 2 + 34;
+			const ry = rect.h / 2 + 34;
+			const ex = (x - rect.x - rect.w / 2) / rx;
+			const ey = (y - rect.y - rect.h / 2) / ry;
+			const ring = Math.hypot(ex, ey) || 1;
+			if (ring > GATHER_REACH) continue;
+			const tangent = Math.hypot(ey * rx, ex * ry) || 1;
+			const normal = Math.hypot(ex / rx, ey / ry) || 1;
+			const inward = Math.max(-1, Math.min(1, 1 - ring)) * 1.6;
+			const dx = (-ey * rx) / tangent + (ex / rx / normal) * inward;
+			const dy = (ex * ry) / tangent + (ey / ry / normal) * inward;
+			const length = Math.hypot(dx, dy) || 1;
+			const falloff = ring < GATHER_REACH / 2 ? 1 : (GATHER_REACH - ring) / (GATHER_REACH / 2);
+			return { x: dx / length, y: dy / length, weight: GATHER_WEIGHT * glow * falloff };
+		}
+		return null;
+	}
+
+	/** Birds leave the cursor alone while they circle a hovered link. */
+	private get birdCursor() {
+		return this.linkStyle === 'gather' && this.hovering ? null : this.cursor;
+	}
+
+	private restOffset(b: Borb): Point {
+		const t = this.time;
+		const link = b.link;
+		if (link && this.linkStyle === 'ruffle') {
+			const reach = link.cell * 0.14 * link.glow;
+			return { x: Math.cos(t * 13 + b.seed) * reach, y: Math.sin(t * 17 + b.seed * 2) * reach };
+		}
+		if (link && this.linkStyle === 'hop') {
+			const along = (b.hx - link.rect.x) / link.rect.w;
+			return { x: 0, y: -Math.abs(Math.sin(t * 6 - along * 6)) * link.cell * 0.9 * link.glow };
+		}
+		if (link && this.linkStyle === 'tighten') {
+			const reach = link.cell * 0.3 * (1 - link.glow);
+			return { x: Math.cos(t * 0.7 + b.seed) * reach, y: Math.sin(t * 0.9 + b.seed * 1.7) * reach };
+		}
+		const bob = (link?.cell ?? this.cell) * 0.05;
+		return { x: Math.cos(t * 0.9 + b.seed) * bob, y: Math.sin(t * 1.3 + b.seed) * bob };
+	}
+
+	private drawBorbs(ctx: CanvasRenderingContext2D, borbs: Borb[], radius: number, alpha: number, dt: number) {
+		for (const b of borbs) {
 			if (b.flight > 0.02) {
 				b.flap += dt / 0.14;
 				ctx.globalAlpha = flapAlpha(b.flap) * b.flight * 0.85;
 				wings(ctx, b.x, b.y, radius * 2.6, b.heading, 40 * DEG, 130 * DEG);
 			}
-			ctx.globalAlpha = 0.95;
+			ctx.globalAlpha = alpha;
 			ctx.beginPath();
 			ctx.arc(b.x, b.y, radius, 0, TAU);
 			ctx.fill();
 		}
-		ctx.globalAlpha = 1;
 	}
 
 	private sky(ctx: CanvasRenderingContext2D) {
@@ -283,7 +491,8 @@ export class Sky {
 			fill: '',
 			alpha: 1,
 			phase,
-			tint: [Math.random(), Math.random(), Math.random()]
+			tint: [Math.random(), Math.random(), Math.random()],
+			perch: null
 		};
 	}
 
@@ -317,7 +526,17 @@ export class Sky {
 	}
 
 	private stepButterfly(b: Boid, dt: number) {
-		const cursor = this.cursor;
+		const cursor = this.birdCursor;
+		const pull = this.gather(b.x, b.y);
+		if (pull) {
+			const speed = Math.hypot(b.vx, b.vy);
+			const turn = (pull.weight / GATHER_WEIGHT) * 4 * dt * speed;
+			b.vx += pull.x * turn;
+			b.vy += pull.y * turn;
+			const scale = speed / (Math.hypot(b.vx, b.vy) || 1);
+			b.vx *= scale;
+			b.vy *= scale;
+		}
 		if (cursor) {
 			const dx = b.x - cursor.x;
 			const dy = b.y - cursor.y;
@@ -337,11 +556,21 @@ export class Sky {
 
 	private steer(flock: Flock, dt: number) {
 		const { boids, speed } = flock;
-		const cursor = this.cursor;
+		const cursor = this.birdCursor;
 		const next = new Float64Array(boids.length * 2);
 
 		for (let i = 0; i < boids.length; i++) {
 			const b = boids[i];
+			if (b.perch) {
+				const dx = b.perch.x - b.x;
+				const dy = b.perch.y - b.y;
+				const dist = Math.hypot(dx, dy) || 1;
+				const approach = Math.min(speed * 1.8, dist * 5);
+				const blend = Math.min(1, 6 * dt);
+				next[i * 2] = b.vx + ((dx / dist) * approach - b.vx) * blend;
+				next[i * 2 + 1] = b.vy + ((dy / dist) * approach - b.vy) * blend;
+				continue;
+			}
 			let sx: number;
 			let sy: number;
 			let weight = flock.alignmentWeight + flock.cohesionWeight + flock.separationWeight;
@@ -398,6 +627,13 @@ export class Sky {
 				}
 			}
 
+			const pull = this.gather(b.x, b.y);
+			if (pull) {
+				sx += pull.x * pull.weight;
+				sy += pull.y * pull.weight;
+				weight += pull.weight;
+			}
+
 			const steering = Math.hypot(sx, sy);
 			if (steering > 0) {
 				sx = (sx / steering) * speed;
@@ -422,6 +658,14 @@ export class Sky {
 	private move(b: Boid, dt: number) {
 		b.x += b.vx * dt;
 		b.y += b.vy * dt;
+		if (b.perch) {
+			if (Math.hypot(b.perch.x - b.x, b.perch.y - b.y) < 1.5) {
+				b.x = b.perch.x;
+				b.y = b.perch.y;
+				b.vx = b.vy = 0;
+			}
+			return;
+		}
 		if (b.phase) {
 			b.x = ((b.x % this.width) + this.width) % this.width;
 			b.y = ((b.y % this.height) + this.height) % this.height;
@@ -449,19 +693,27 @@ export class Sky {
 			if (b.y < 0) b.vy = Math.abs(b.vy);
 			else if (b.y > this.height) b.vy = -Math.abs(b.vy);
 		} else {
-			const bob = this.cell * 0.05;
-			const dx = b.hx + Math.cos(this.time * 0.9 + b.seed) * bob - b.x;
-			const dy = b.hy + Math.sin(this.time * 1.3 + b.seed) * bob - b.y;
+			const offset = this.restOffset(b);
+			const dx = b.hx + offset.x - b.x;
+			const dy = b.hy + offset.y - b.y;
 			const dist = Math.hypot(dx, dy) || 1;
+			if (b.link && (b.landed ||= dist < 1.5)) {
+				b.x = b.hx + offset.x;
+				b.y = b.hy + offset.y;
+				b.vx = b.vy = 0;
+				b.flight += (0 - b.flight) * Math.min(1, 8 * dt);
+				return;
+			}
 			const speed = Math.min(BORB_SPEED, dist * BORB_ARRIVE);
 			tx = (dx / dist) * speed;
 			ty = (dy / dist) * speed;
 			rate = BORB_ARRIVE;
 		}
 
-		if (this.cursor) {
-			const dx = b.x - this.cursor.x;
-			const dy = b.y - this.cursor.y;
+		const cursor = b.link || this.hovering ? null : this.cursor;
+		if (cursor) {
+			const dx = b.x - cursor.x;
+			const dy = b.y - cursor.y;
 			const dist = Math.hypot(dx, dy);
 			if (dist < CURSOR_RADIUS && dist > 0) {
 				const closeness = 1 - dist / CURSOR_RADIUS;
@@ -489,7 +741,8 @@ export class Sky {
 		b.flap += dt / period;
 
 		ctx.fillStyle = b.fill;
-		ctx.globalAlpha = flapAlpha(b.flap) * b.alpha;
+		const folded = b.perch ? Math.min(1, Math.hypot(b.vx, b.vy) / 60) : 1;
+		ctx.globalAlpha = flapAlpha(b.flap) * b.alpha * folded;
 		wings(ctx, b.x, b.y, b.wingSize, Math.atan2(b.vy, b.vx), b.wingStart, b.wingArc);
 		ctx.globalAlpha = b.alpha;
 		ctx.beginPath();

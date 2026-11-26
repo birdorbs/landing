@@ -1,5 +1,10 @@
 <script lang="ts">
 	import Sky from '$lib/sky/Sky.svelte';
+
+	const links = [
+		{ text: 'quillmark', href: 'https://github.com/birdorbs/quillmark' },
+		{ text: 'github', href: 'https://github.com/birdorbs' }
+	];
 </script>
 
 <svelte:head>
@@ -9,7 +14,7 @@
 
 <main>
 	<h1>birdorbs</h1>
-	<Sky />
+	<Sky {links} />
 </main>
 
 <style>
