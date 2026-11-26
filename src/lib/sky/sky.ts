@@ -294,13 +294,8 @@ export class Sky {
 		for (const b of this.butterflies) this.drawBoid(ctx, b, dt);
 		for (const flock of this.flocks) for (const b of flock.boids) this.drawBoid(ctx, b, dt);
 
-		const onSky = rgb(this.palette.letters);
-		const onMoon = rgb(this.palette.lettersOnMoon);
-		const disc2 = moon.size * moon.size;
-		this.drawBorbs(ctx, this.borbs, this.cell * 0.42, 0.95, dt, (b) =>
-			(b.x - moon.x) ** 2 + (b.y - moon.y) ** 2 < disc2 ? onMoon : onSky
-		);
-		ctx.fillStyle = onSky;
+		ctx.fillStyle = rgb(this.palette.letters);
+		this.drawBorbs(ctx, this.borbs, this.cell * 0.42, 0.95, dt);
 		for (const [index, link] of this.links.entries()) {
 			if (link.radius) {
 				this.drawMark(ctx, link, index, dt);
@@ -548,16 +543,8 @@ export class Sky {
 		return { x: Math.cos(t * 0.9 + b.seed) * bob, y: Math.sin(t * 1.3 + b.seed) * bob };
 	}
 
-	private drawBorbs(
-		ctx: CanvasRenderingContext2D,
-		borbs: Borb[],
-		radius: number,
-		alpha: number,
-		dt: number,
-		fill?: (b: Borb) => string
-	) {
+	private drawBorbs(ctx: CanvasRenderingContext2D, borbs: Borb[], radius: number, alpha: number, dt: number) {
 		for (const b of borbs) {
-			if (fill) ctx.fillStyle = fill(b);
 			if (b.flight > 0.02) {
 				b.flap += dt / 0.14;
 				ctx.globalAlpha = flapAlpha(b.flap) * b.flight * 0.85;
