@@ -112,7 +112,8 @@ const MARK_REST_ALPHA = 0.62;
 const WING_REACH = 2.6;
 const WING_START = 40 * DEG;
 const WING_ARC = 130 * DEG;
-const UP = -Math.PI / 2;
+/** How far, in radians, a hovered link dot's wings jitter about its facing. */
+const BUZZ = 0.16;
 const FLAP_PEAK = 0.9;
 /** How far a tail fades over a wingbeat, as a share of how far the wings do. */
 const TAIL_FADE = 0.5;
@@ -297,7 +298,9 @@ export class Sky {
 				if (glow > 0.02) {
 					for (const b of link.borbs) {
 						ctx.globalAlpha = flapAlpha(this.time * 9 + b.seed) * glow * 0.5;
-						wings(ctx, b.x, b.y, radius * WING_REACH, UP, WING_START, WING_ARC);
+						const sway = Math.sin(this.time * 1.1 + b.seed) * 0.5;
+						const facing = b.seed * 7 + sway + Math.sin(this.time * 23 + b.seed * 3) * BUZZ;
+						wings(ctx, b.x, b.y, radius * WING_REACH, facing, WING_START, WING_ARC);
 					}
 				}
 			} else if (this.linkStyle === 'tighten') {
