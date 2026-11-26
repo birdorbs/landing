@@ -15,10 +15,12 @@ const BORB_ARRIVE = 5;
 const LINK_GAP_COLUMNS = 8;
 const GATHER_REACH = 3.2;
 const GATHER_WEIGHT = 900;
+const FLOW_WEIGHT = 1100;
+const FLOW_MARGIN = { mark: 44, link: 26 };
 const PERCHERS: Species[] = ['hummingbirds', 'cardinals', 'budgerigars', 'doves'];
 
 /** What a link's letters and the birds around it do while the link is hovered or focused. */
-export type LinkStyle = 'ruffle' | 'perch' | 'gather' | 'hop' | 'tighten';
+export type LinkStyle = 'ruffle' | 'perch' | 'gather' | 'hop' | 'tighten' | 'flow';
 
 export interface Rect {
 	x: number;
@@ -120,6 +122,7 @@ export class Sky {
 	private flocks: Flock[] = [];
 	private borbs: Borb[] = [];
 	private links: Link[] = [];
+	private markRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
 	private cell = 0;
 	private time = 0;
 	private populated = false;
@@ -185,6 +188,14 @@ export class Sky {
 
 		const { cell, homes } = layoutWord(this.word, width, height);
 		this.cell = cell;
+		const xs = homes.map((home) => home.x);
+		const ys = homes.map((home) => home.y);
+		this.markRect = {
+			x: Math.min(...xs) - cell / 2,
+			y: Math.min(...ys) - cell / 2,
+			w: Math.max(...xs) - Math.min(...xs) + cell,
+			h: Math.max(...ys) - Math.min(...ys) + cell
+		};
 		const placed = this.placeLinks(cell);
 		if (first) {
 			this.populate();
@@ -366,7 +377,7 @@ export class Sky {
 
 	/** While a link is hovered in the gather style, the pull that bends a bird at (x, y) into orbit around it. */
 	private gather(x: number, y: number): { x: number; y: number; weight: number } | null {
-		if (this.linkStyle !== 'gather') return null;
+		if (this.linkStyle !== 'gather' && this.linkStyle !== 'flow') return null;
 		for (const { rect, glow } of this.links) {
 			if (glow < 0.05) continue;
 			const rx = rect.w / 2 + 34;
@@ -387,9 +398,44 @@ export class Sky {
 		return null;
 	}
 
+	/**
+	 * In the flow style the words are rocks in a stream: a bird at (x, y) moving along (vx, vy) is pushed off
+	 * the nearest word and along its edge, harder the closer it gets.
+	 */
+	private flow(x: number, y: number, vx: number, vy: number): { x: number; y: number; weight: number } | null {
+		if (this.linkStyle !== 'flow') return null;
+		let sx = 0;
+		let sy = 0;
+		let weight = 0;
+		const around = (rect: Rect, margin: number) => {
+			const nx = Math.max(rect.x, Math.min(rect.x + rect.w, x));
+			const ny = Math.max(rect.y, Math.min(rect.y + rect.h, y));
+			let dx = x - nx;
+			let dy = y - ny;
+			let dist = Math.hypot(dx, dy);
+			if (dist >= margin) return;
+			if (dist === 0) {
+				dx = 0;
+				dy = y < rect.y + rect.h / 2 ? -1 : 1;
+				dist = 1;
+			} else {
+				dx /= dist;
+				dy /= dist;
+				dist = 1 - dist / margin;
+			}
+			const along = vx * -dy + vy * dx >= 0 ? 1 : -1;
+			sx += (dx + -dy * along * 0.7) * dist;
+			sy += (dy + dx * along * 0.7) * dist;
+			weight += dist;
+		};
+		around(this.markRect, FLOW_MARGIN.mark);
+		for (const link of this.links) around(link.rect, FLOW_MARGIN.link);
+		return weight ? { x: sx * FLOW_WEIGHT, y: sy * FLOW_WEIGHT, weight: Math.min(1, weight) * FLOW_WEIGHT } : null;
+	}
+
 	/** Birds leave the cursor alone while they circle a hovered link. */
 	private get birdCursor() {
-		return this.linkStyle === 'gather' && this.hovering ? null : this.cursor;
+		return (this.linkStyle === 'gather' || this.linkStyle === 'flow') && this.hovering ? null : this.cursor;
 	}
 
 	private restOffset(b: Borb): Point {
@@ -632,6 +678,12 @@ export class Sky {
 				sx += pull.x * pull.weight;
 				sy += pull.y * pull.weight;
 				weight += pull.weight;
+			}
+			const push = this.flow(b.x, b.y, b.vx, b.vy);
+			if (push) {
+				sx += push.x;
+				sy += push.y;
+				weight += push.weight;
 			}
 
 			const steering = Math.hypot(sx, sy);
