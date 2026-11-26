@@ -33,6 +33,10 @@ export interface Rect {
 export interface LinkSpec {
 	text: string;
 	mark?: string;
+	/** A brand mark keeps the palette's `mark` color; any other takes the letters' color. */
+	brand?: boolean;
+	/** The bottom corner a mark sits in; right unless said. */
+	corner?: 'left' | 'right';
 }
 
 interface Link {
@@ -103,6 +107,10 @@ interface Borb {
 	link: Link | null;
 }
 
+const FLAP_PEAK = 0.9;
+/** How far a tail fades over a wingbeat, as a share of how far the wings do. */
+const TAIL_FADE = 0.5;
+
 function wings(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, heading: number, start: number, arc: number) {
 	ctx.beginPath();
 	ctx.moveTo(x, y);
@@ -114,9 +122,15 @@ function wings(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, h
 	ctx.fill();
 }
 
+function disc(ctx: CanvasRenderingContext2D, x: number, y: number, r: number) {
+	ctx.beginPath();
+	ctx.arc(x, y, r, 0, TAU);
+	ctx.fill();
+}
+
 function flapAlpha(flap: number) {
 	const t = flap % 2;
-	return (t > 1 ? 2 - t : t) * 0.9;
+	return (t > 1 ? 2 - t : t) * FLAP_PEAK;
 }
 
 export class Sky {
@@ -278,7 +292,7 @@ export class Sky {
 				if (glow > 0.02) {
 					for (const b of link.borbs) {
 						ctx.globalAlpha = flapAlpha(this.time * 9 + b.seed) * glow * 0.5;
-						wings(ctx, b.x, b.y, radius * 2.1, -90 * DEG, 50 * DEG, 110 * DEG);
+						disc(ctx, b.x, b.y, radius * 2.1);
 					}
 				}
 			} else if (this.linkStyle === 'tighten') {
@@ -323,7 +337,7 @@ export class Sky {
 
 	/**
 	 * Word links sit along the bottom of the page, side by side on a wide screen and stacked on a tall one.
-	 * Mark links are orbs in the bottom right corner.
+	 * Mark links are orbs in the bottom corners.
 	 */
 	private placeLinks(wordCell: number) {
 		const { width, height } = this;
@@ -335,18 +349,19 @@ export class Sky {
 			: columns.reduce((n, c) => n + c, 0) + LINK_GAP_COLUMNS * (columns.length - 1);
 		const cell = Math.min(wordCell * (stacked ? 0.75 : 0.5), (width * 0.8) / (span || 1), 11);
 		const rows = stacked ? columns.length * (ROWS + 3) - 3 : ROWS;
-		const top = height - Math.max(36, height * 0.08) - (rows - 0.5) * cell;
+		const top = height - Math.max(60, height * 0.13) - (rows - 0.5) * cell;
 		let left = (width - (span - 1) * cell) / 2;
 
 		const radius = Math.max(16, Math.min(24, Math.min(width, height) * 0.035));
 		const margin = Math.max(20, Math.min(width, height) * 0.04);
-		let orbX = width - margin - radius;
+		const orbX = { left: margin + radius, right: width - margin - radius };
 
 		let word = 0;
 		return this.linkSpecs.map((spec) => {
 			if (spec.mark) {
-				const home = { x: orbX, y: height - margin - radius };
-				orbX -= radius * 2 + 16;
+				const corner = spec.corner ?? 'right';
+				const home = { x: orbX[corner], y: height - margin - radius };
+				orbX[corner] += (radius * 2 + 16) * (corner === 'left' ? 1 : -1);
 				const reach = radius + 8;
 				return {
 					cell: radius * 0.4,
@@ -372,22 +387,22 @@ export class Sky {
 		const b = link.borbs[0];
 		const ruffle = this.linkStyle === 'ruffle' || this.linkStyle === 'flow' ? link.glow : 0;
 		const radius = link.radius * (1 + 0.22 * ruffle);
-		ctx.fillStyle = rgb(this.palette.mark);
+		ctx.fillStyle = rgb(this.linkSpecs[index].brand ? this.palette.mark : this.palette.letters);
 		if (b.flight > 0.02) {
 			b.flap += dt / 0.14;
 			ctx.globalAlpha = flapAlpha(b.flap) * b.flight * 0.85;
-			wings(ctx, b.x, b.y, radius * 1.6, b.heading, 40 * DEG, 130 * DEG);
+			disc(ctx, b.x, b.y, radius * 1.6);
 		}
 		if (ruffle > 0.02) {
 			ctx.globalAlpha = flapAlpha(this.time * 9 + b.seed) * ruffle * 0.5;
-			wings(ctx, b.x, b.y, radius * 1.4, -90 * DEG, 50 * DEG, 110 * DEG);
+			disc(ctx, b.x, b.y, radius * 1.4);
 		}
 		const path = (this.marks[index] ??= new Path2D(this.linkSpecs[index].mark));
 		ctx.globalAlpha = 1;
 		ctx.save();
 		ctx.translate(b.x - radius, b.y - radius);
 		ctx.scale(radius / 8, radius / 8);
-		ctx.fill(path);
+		ctx.fill(path, 'evenodd');
 		ctx.restore();
 		ctx.fillStyle = rgb(this.palette.letters);
 	}
@@ -839,17 +854,19 @@ export class Sky {
 
 		ctx.fillStyle = b.fill;
 		const folded = b.perch ? Math.min(1, Math.hypot(b.vx, b.vy) / 60) : 1;
-		ctx.globalAlpha = flapAlpha(b.flap) * b.alpha * folded;
+		const beat = flapAlpha(b.flap);
+		ctx.globalAlpha = beat * b.alpha * folded;
 		const heading = Math.atan2(b.vy, b.vx);
 		wings(ctx, b.x, b.y, b.wingSize, heading, b.wingStart, b.wingArc);
-		ctx.globalAlpha = b.alpha;
 		if (b.tailSize) {
+			ctx.globalAlpha = b.alpha * (1 - TAIL_FADE * (1 - beat / FLAP_PEAK));
 			const back = heading + Math.PI;
 			ctx.beginPath();
 			ctx.moveTo(b.x, b.y);
 			ctx.arc(b.x, b.y, b.tailSize, back - b.tailSpread / 2, back + b.tailSpread / 2);
 			ctx.fill();
 		}
+		ctx.globalAlpha = b.alpha;
 		ctx.beginPath();
 		ctx.arc(b.x, b.y, b.size, 0, TAU);
 		ctx.fill();

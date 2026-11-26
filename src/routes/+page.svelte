@@ -4,7 +4,7 @@
 
 	const links = [
 		{ text: 'quillmark', href: 'https://github.com/birdorbs/quillmark' },
-		{ text: 'birdorbs on GitHub', href: 'https://github.com/birdorbs', mark: GITHUB_MARK }
+		{ text: 'birdorbs on GitHub', href: 'https://github.com/birdorbs', mark: GITHUB_MARK, brand: true }
 	];
 </script>
 

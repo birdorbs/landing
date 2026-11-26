@@ -16,10 +16,14 @@
 				overflow: hidden;
 			}
 			@media (prefers-color-scheme: light) {
-				html,
-				body {
+				html:not([data-theme='dark']),
+				html:not([data-theme='dark']) body {
 					background: #ebe9f0;
 				}
+			}
+			html[data-theme='light'],
+			html[data-theme='light'] body {
+				background: #ebe9f0;
 			}
 		</style>
 		%sveltekit.head%

@@ -1,5 +1,5 @@
 export interface Look {
-	/** A steady wedge behind the body: its length in body radii and its spread in degrees. */
+	/** A wedge behind the body that fades half as far as the wings on each beat: its length in body radii and its spread in degrees. */
 	tail?: [number, number];
 	wingSize?: number;
 	wingStart: number;
@@ -58,7 +58,7 @@ export const FLOCKS: FlockSpec[] = [
 	},
 	{
 		species: 'hummingbirds',
-		look: { wingStart: 55, wingArc: 160, flapPeriod: 0.05, tail: [1.6, 30] },
+		look: { wingStart: 55, wingArc: 160, flapPeriod: 0.05, tail: [2.4, 30] },
 		flocks: [3, 3],
 		count: [14, 17],
 		speed: [150, 150],
@@ -70,7 +70,7 @@ export const FLOCKS: FlockSpec[] = [
 	},
 	{
 		species: 'cardinals',
-		look: { wingStart: 40, wingArc: 160, tail: [1.9, 36] },
+		look: { wingStart: 40, wingArc: 160, tail: [2.8, 36] },
 		flocks: [2, 3],
 		count: [11, 14],
 		speed: [150, 190],
@@ -81,7 +81,7 @@ export const FLOCKS: FlockSpec[] = [
 	},
 	{
 		species: 'budgerigars',
-		look: { wingStart: 75, wingArc: 120, tail: [2.6, 26] },
+		look: { wingStart: 75, wingArc: 120, tail: [3.6, 26] },
 		flocks: [1, 2],
 		count: [11, 13],
 		speed: [120, 140],
@@ -92,7 +92,7 @@ export const FLOCKS: FlockSpec[] = [
 	},
 	{
 		species: 'doves',
-		look: { wingStart: 30, wingArc: 170, tail: [1.9, 62] },
+		look: { wingStart: 30, wingArc: 170, tail: [2.7, 62] },
 		flocks: [1, 1],
 		count: [2, 2],
 		speed: [120, 120],
