@@ -34,7 +34,7 @@ export const BUTTERFLY_LOOK = { wingSize: 5, wingStart: [30, 60], wingArc: [120,
 
 export const FLOCKS: FlockSpec[] = [
 	{
-		look: { color: [0, 0, 0, 255], wingStart: 40, wingArc: 130 },
+		look: { color: [22, 16, 30, 255], wingStart: 40, wingArc: 130 },
 		flocks: [3, 3],
 		count: [14, 17],
 		speed: [50, 70],
@@ -56,7 +56,7 @@ export const FLOCKS: FlockSpec[] = [
 		separationRadius: 90
 	},
 	{
-		look: { color: [10, 10, 240, 255], wingStart: 55, wingArc: 160, flapPeriod: 0.05 },
+		look: { color: [112, 134, 214, 255], wingStart: 55, wingArc: 160, flapPeriod: 0.05 },
 		flocks: [3, 3],
 		count: [14, 17],
 		speed: [150, 150],
@@ -67,7 +67,7 @@ export const FLOCKS: FlockSpec[] = [
 		cohesionRadius: 400
 	},
 	{
-		look: { color: [240, 10, 10, 255], wingStart: 40, wingArc: 160 },
+		look: { color: [212, 98, 96, 255], wingStart: 40, wingArc: 160 },
 		flocks: [2, 3],
 		count: [11, 14],
 		speed: [150, 190],
@@ -77,7 +77,7 @@ export const FLOCKS: FlockSpec[] = [
 		separationRadius: 18
 	},
 	{
-		look: { color: [10, 240, 10, 255], wingStart: 75, wingArc: 120 },
+		look: { color: [128, 188, 152, 255], wingStart: 75, wingArc: 120 },
 		flocks: [1, 2],
 		count: [11, 13],
 		speed: [120, 140],
@@ -87,7 +87,7 @@ export const FLOCKS: FlockSpec[] = [
 		separationWeight: 300
 	},
 	{
-		look: { color: [255, 200, 200, 255], wingStart: 30, wingArc: 170 },
+		look: { color: [255, 168, 188, 255], wingStart: 30, wingArc: 170 },
 		flocks: [1, 1],
 		count: [2, 2],
 		speed: [120, 120],
