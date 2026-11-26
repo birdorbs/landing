@@ -77,7 +77,7 @@ interface Flock {
 	currentVelocityWeight: number;
 }
 
-/** A dot of the wordmark: it flies like a bird while `roam` runs, then steers back to its home. */
+/** A dot of the wordmark or of a link: it flies like a bird while `roam` runs, then steers back to its home. */
 interface Borb {
 	x: number;
 	y: number;
@@ -91,8 +91,6 @@ interface Borb {
 	flap: number;
 	seed: number;
 	link: Link | null;
-	/** A link dot that has reached its home holds its place exactly from then on. */
-	landed: boolean;
 }
 
 function wings(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, heading: number, start: number, arc: number) {
@@ -219,7 +217,6 @@ export class Sky {
 			b.x = b.hx;
 			b.y = b.hy;
 			b.vx = b.vy = b.roam = b.flight = 0;
-			b.landed = true;
 		}
 	}
 
@@ -302,8 +299,7 @@ export class Sky {
 				flight: 1,
 				flap: rand(0, 10),
 				seed: rand(0, TAU),
-				link,
-				landed: false
+				link
 			};
 		});
 	}
@@ -739,20 +735,13 @@ export class Sky {
 			const dx = b.hx + offset.x - b.x;
 			const dy = b.hy + offset.y - b.y;
 			const dist = Math.hypot(dx, dy) || 1;
-			if (b.link && (b.landed ||= dist < 1.5)) {
-				b.x = b.hx + offset.x;
-				b.y = b.hy + offset.y;
-				b.vx = b.vy = 0;
-				b.flight += (0 - b.flight) * Math.min(1, 8 * dt);
-				return;
-			}
 			const speed = Math.min(BORB_SPEED, dist * BORB_ARRIVE);
 			tx = (dx / dist) * speed;
 			ty = (dy / dist) * speed;
 			rate = BORB_ARRIVE;
 		}
 
-		const cursor = b.link || this.hovering ? null : this.cursor;
+		const cursor = this.cursor;
 		if (cursor) {
 			const dx = b.x - cursor.x;
 			const dy = b.y - cursor.y;
