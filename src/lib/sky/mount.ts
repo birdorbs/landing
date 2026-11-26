@@ -22,15 +22,24 @@ export function mountSky(canvas: HTMLCanvasElement, word = 'birdorbs', links: Sk
 		palette(),
 		links.map((link) => link.text)
 	);
+	let pointed = -1;
+	let focused = -1;
 	const anchors = links.map(({ text, href }, i) => {
 		const anchor = document.createElement('a');
 		anchor.href = href;
 		anchor.setAttribute('aria-label', text);
-		anchor.style.cssText = 'position:absolute;border-radius:8px';
-		anchor.addEventListener('pointerenter', () => sky.hover(i, true));
-		anchor.addEventListener('pointerleave', () => sky.hover(i, false));
-		anchor.addEventListener('focus', () => sky.hover(i, true));
-		anchor.addEventListener('blur', () => sky.hover(i, false));
+		anchor.style.cssText =
+			'position:absolute;border-radius:8px;touch-action:none;-webkit-tap-highlight-color:transparent';
+		anchor.addEventListener('focus', () => {
+			if (!anchor.matches(':focus-visible')) return;
+			focused = i;
+			sky.hover(i, true);
+		});
+		anchor.addEventListener('blur', () => {
+			if (focused !== i) return;
+			focused = -1;
+			if (pointed !== i) sky.hover(i, false);
+		});
 		anchor.addEventListener('click', () => sky.press(i));
 		canvas.parentElement!.append(anchor);
 		return anchor;
@@ -82,10 +91,23 @@ export function mountSky(canvas: HTMLCanvasElement, word = 'birdorbs', links: Sk
 		const rect = canvas.getBoundingClientRect();
 		return { x: e.clientX - rect.left, y: e.clientY - rect.top };
 	};
-	const onMove = (e: PointerEvent) => (sky.cursor = local(e));
-	const onLeave = () => (sky.cursor = null);
+	/** A touch stays captured by the element it began on, so the link under the pointer is found by position. */
+	const point = (cursor: { x: number; y: number } | null) => {
+		sky.cursor = cursor;
+		const over = cursor
+			? sky.linkRects.findIndex(
+					(r) => cursor.x >= r.x && cursor.x <= r.x + r.w && cursor.y >= r.y && cursor.y <= r.y + r.h
+				)
+			: -1;
+		if (over === pointed) return;
+		if (pointed >= 0 && pointed !== focused) sky.hover(pointed, false);
+		if (over >= 0) sky.hover(over, true);
+		pointed = over;
+	};
+	const onMove = (e: PointerEvent) => point(local(e));
+	const onLeave = () => point(null);
 	const onUp = (e: PointerEvent) => {
-		if (e.pointerType !== 'mouse') sky.cursor = null;
+		if (e.pointerType !== 'mouse') point(null);
 	};
 	const onMotion = () => {
 		fit();
