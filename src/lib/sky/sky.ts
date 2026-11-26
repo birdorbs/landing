@@ -12,7 +12,9 @@ const CURSOR_WEIGHT = 700;
 const BORB_SPEED = 420;
 const BORB_ARRIVE = 5;
 /** How much a hovered link grows about its middle, dots and spacing alike. */
-const LINK_SWELL = 0.14;
+const LINK_SWELL = 0.09;
+/** A link's dots settle faster than the title's, so a hover answers at once. */
+const LINK_ARRIVE = 16;
 
 const LINK_GAP_COLUMNS = 8;
 const GATHER_REACH = 3.2;
@@ -261,7 +263,7 @@ export class Sky {
 		for (const b of this.butterflies) this.stepButterfly(b, dt);
 		for (const flock of this.flocks) this.steer(flock, dt);
 		for (const flock of this.flocks) for (const b of flock.boids) this.move(b, dt);
-		for (const link of this.links) link.glow += ((link.hovered ? 1 : 0) - link.glow) * Math.min(1, 9 * dt);
+		for (const link of this.links) link.glow += ((link.hovered ? 1 : 0) - link.glow) * Math.min(1, 18 * dt);
 		for (const b of this.everyBorb()) this.stepBorb(b, dt);
 	}
 
@@ -821,10 +823,11 @@ export class Sky {
 			const dx = b.hx + offset.x - b.x;
 			const dy = b.hy + offset.y - b.y;
 			const dist = Math.hypot(dx, dy) || 1;
-			const speed = Math.min(BORB_SPEED, dist * BORB_ARRIVE);
+			const arrive = b.link ? LINK_ARRIVE : BORB_ARRIVE;
+			const speed = Math.min(BORB_SPEED, dist * arrive);
 			tx = (dx / dist) * speed;
 			ty = (dy / dist) * speed;
-			rate = BORB_ARRIVE;
+			rate = arrive;
 		}
 
 		const cursor = b.link ? null : this.cursor;
