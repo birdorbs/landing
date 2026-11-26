@@ -28,6 +28,8 @@ export interface Point {
 
 export interface WordLayout {
 	cell: number;
+	/** The y just below the lowest row of dots. */
+	bottom: number;
 	homes: Point[];
 }
 
@@ -54,11 +56,11 @@ export function placeWord(word: string, left: number, top: number, cell: number)
 	return homes;
 }
 
-/** The wordmark, centred horizontally, in column order so a reveal can sweep left to right. */
+/** The wordmark, centred across the top of the page, in column order so a reveal can sweep left to right. */
 export function layoutWord(word: string, width: number, height: number): WordLayout {
 	const columns = columnsOf(word);
 	const cell = Math.min((width * 0.88) / columns, (height * 0.2) / BASELINE_ROWS, MAX_CELL);
 	const left = (width - (columns - 1) * cell) / 2;
-	const top = height * 0.56 - ((BASELINE_ROWS - 1) * cell) / 2;
-	return { cell, homes: placeWord(word, left, top, cell) };
+	const top = Math.max(36, height * 0.09) + cell / 2;
+	return { cell, bottom: top + (BASELINE_ROWS - 0.5) * cell, homes: placeWord(word, left, top, cell) };
 }

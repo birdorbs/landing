@@ -183,9 +183,9 @@ export class Sky {
 		this.moon.x = anchor.x + (first ? 0 : dx);
 		this.moon.y = anchor.y + (first ? 0 : dy);
 
-		const { cell, homes } = layoutWord(this.word, width, height);
+		const { cell, bottom, homes } = layoutWord(this.word, width, height);
 		this.cell = cell;
-		const placed = this.placeLinks(cell);
+		const placed = this.placeLinks(cell, bottom);
 		if (first) {
 			this.populate();
 			this.borbs = this.hatch(homes, null, 0.3);
@@ -305,7 +305,7 @@ export class Sky {
 	}
 
 	/** Links sit under the wordmark: side by side on a wide screen, stacked on a tall one. */
-	private placeLinks(wordCell: number) {
+	private placeLinks(wordCell: number, wordBottom: number) {
 		const { width, height } = this;
 		const columns = this.linkWords.map(columnsOf);
 		if (!columns.length) return [];
@@ -314,7 +314,7 @@ export class Sky {
 			? Math.max(...columns)
 			: columns.reduce((n, c) => n + c, 0) + LINK_GAP_COLUMNS * (columns.length - 1);
 		const cell = Math.min(wordCell * (stacked ? 0.75 : 0.5), (width * 0.8) / span, 11);
-		const top = height * 0.56 + 3 * wordCell + Math.max(26, 2.4 * wordCell);
+		const top = wordBottom + Math.max(26, 2.4 * wordCell);
 		let left = (width - (span - 1) * cell) / 2;
 		return this.linkWords.map((word, i) => {
 			const x = stacked ? (width - (columns[i] - 1) * cell) / 2 : left;
@@ -473,7 +473,7 @@ export class Sky {
 
 	private moonAnchor(): Point {
 		const portrait = this.height > this.width;
-		return { x: this.width * (portrait ? 0.68 : 0.74), y: this.height * (portrait ? 0.2 : 0.23) };
+		return { x: this.width * (portrait ? 0.62 : 0.7), y: this.height * (portrait ? 0.62 : 0.64) };
 	}
 
 	private populate() {
