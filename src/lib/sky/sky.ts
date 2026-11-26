@@ -370,14 +370,15 @@ export class Sky {
 		const b = link.borbs[0];
 		const ruffle = this.linkStyle === 'ruffle' || this.linkStyle === 'flow' ? link.glow : 0;
 		const radius = link.radius * (1 + 0.22 * ruffle);
+		ctx.fillStyle = rgb(this.palette.mark);
 		if (b.flight > 0.02) {
 			b.flap += dt / 0.14;
 			ctx.globalAlpha = flapAlpha(b.flap) * b.flight * 0.85;
-			wings(ctx, b.x, b.y, radius * 2.4, b.heading, 40 * DEG, 130 * DEG);
+			wings(ctx, b.x, b.y, radius * 1.6, b.heading, 40 * DEG, 130 * DEG);
 		}
 		if (ruffle > 0.02) {
 			ctx.globalAlpha = flapAlpha(this.time * 9 + b.seed) * ruffle * 0.5;
-			wings(ctx, b.x, b.y, radius * 1.9, -90 * DEG, 50 * DEG, 110 * DEG);
+			wings(ctx, b.x, b.y, radius * 1.4, -90 * DEG, 50 * DEG, 110 * DEG);
 		}
 		const path = (this.marks[index] ??= new Path2D(this.linkSpecs[index].mark));
 		ctx.globalAlpha = 1;
@@ -386,6 +387,7 @@ export class Sky {
 		ctx.scale(radius / 8, radius / 8);
 		ctx.fill(path);
 		ctx.restore();
+		ctx.fillStyle = rgb(this.palette.letters);
 	}
 
 	private callPercher(link: Link) {
