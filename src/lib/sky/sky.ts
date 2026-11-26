@@ -107,6 +107,12 @@ interface Borb {
 	link: Link | null;
 }
 
+const MARK_REST_ALPHA = 0.62;
+/** Every letter dot, in the title or a link, wears the same wings. */
+const WING_REACH = 2.6;
+const WING_START = 40 * DEG;
+const WING_ARC = 130 * DEG;
+const UP = -Math.PI / 2;
 const FLAP_PEAK = 0.9;
 /** How far a tail fades over a wingbeat, as a share of how far the wings do. */
 const TAIL_FADE = 0.5;
@@ -119,24 +125,6 @@ function wings(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, h
 	ctx.moveTo(x, y);
 	ctx.arc(x, y, r, heading - start - arc, heading - start);
 	ctx.closePath();
-	ctx.fill();
-}
-
-function disc(ctx: CanvasRenderingContext2D, x: number, y: number, r: number) {
-	ctx.beginPath();
-	ctx.arc(x, y, r, 0, TAU);
-	ctx.fill();
-}
-
-const UP = -Math.PI / 2;
-const MARK_GAP = 70 * DEG;
-const MARK_ROCK = 14 * DEG;
-
-/** One wing wrapped around a mark, open at the front to show which way it faces. */
-function collar(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, facing: number) {
-	ctx.beginPath();
-	ctx.moveTo(x, y);
-	ctx.arc(x, y, r, facing + MARK_GAP / 2, facing + TAU - MARK_GAP / 2);
 	ctx.fill();
 }
 
@@ -298,7 +286,7 @@ export class Sky {
 		this.drawBorbs(ctx, this.borbs, this.cell * 0.42, 0.95, dt);
 		for (const [index, link] of this.links.entries()) {
 			if (link.radius) {
-				this.drawMark(ctx, link, index, dt);
+				this.drawMark(ctx, link, index);
 				continue;
 			}
 			const { glow } = link;
@@ -309,7 +297,7 @@ export class Sky {
 				if (glow > 0.02) {
 					for (const b of link.borbs) {
 						ctx.globalAlpha = flapAlpha(this.time * 9 + b.seed) * glow * 0.5;
-						disc(ctx, b.x, b.y, radius * 2.1);
+						wings(ctx, b.x, b.y, radius * WING_REACH, UP, WING_START, WING_ARC);
 					}
 				}
 			} else if (this.linkStyle === 'tighten') {
@@ -327,7 +315,7 @@ export class Sky {
 	}
 
 	private get hovering() {
-		return this.links.some((link) => link.hovered);
+		return this.links.some((link) => link.hovered && !link.radius);
 	}
 
 	private hatch(homes: Point[], link: Link | null, delay: number): Borb[] {
@@ -400,29 +388,15 @@ export class Sky {
 		});
 	}
 
-	private drawMark(ctx: CanvasRenderingContext2D, link: Link, index: number, dt: number) {
-		const b = link.borbs[0];
-		const ruffle = this.linkStyle === 'ruffle' || this.linkStyle === 'flow' ? link.glow : 0;
-		const radius = link.radius * (1 + 0.22 * ruffle);
-		const turn = Math.atan2(Math.sin(b.heading - UP), Math.cos(b.heading - UP)) * Math.min(1, b.flight);
-		const facing = UP + turn + Math.sin(this.time * 5 + b.seed) * MARK_ROCK * ruffle;
-		ctx.fillStyle = rgb(this.linkSpecs[index].brand ? this.palette.mark : this.palette.letters);
-		if (b.flight > 0.02) {
-			b.flap += dt / 0.14;
-			ctx.globalAlpha = flapAlpha(b.flap) * b.flight * 0.85;
-			collar(ctx, b.x, b.y, radius * 1.6, facing);
-		}
-		if (ruffle > 0.02) {
-			ctx.globalAlpha = flapAlpha(this.time * 9 + b.seed) * ruffle * 0.5;
-			collar(ctx, b.x, b.y, radius * 1.4, facing);
-		}
+	/** A mark is a plain button: it stays in its corner and brightens while hovered. */
+	private drawMark(ctx: CanvasRenderingContext2D, link: Link, index: number) {
+		const { rect, radius } = link;
 		const path = (this.marks[index] ??= new Path2D(this.linkSpecs[index].mark));
-		ctx.globalAlpha = 1;
+		ctx.fillStyle = rgb(this.linkSpecs[index].brand ? this.palette.mark : this.palette.letters);
+		ctx.globalAlpha = MARK_REST_ALPHA + (1 - MARK_REST_ALPHA) * link.glow;
 		ctx.save();
-		ctx.translate(b.x, b.y);
-		ctx.rotate(facing - UP);
+		ctx.translate(rect.x + rect.w / 2 - radius, rect.y + rect.h / 2 - radius);
 		ctx.scale(radius / 8, radius / 8);
-		ctx.translate(-8, -8);
 		ctx.fill(path, 'evenodd');
 		ctx.restore();
 		ctx.fillStyle = rgb(this.palette.letters);
@@ -465,8 +439,8 @@ export class Sky {
 	/** While a link is hovered in the gather style, the pull that bends a bird at (x, y) into orbit around it. */
 	private gather(x: number, y: number): { x: number; y: number; weight: number } | null {
 		if (this.linkStyle !== 'gather' && this.linkStyle !== 'flow') return null;
-		for (const { rect, glow } of this.links) {
-			if (glow < 0.05) continue;
+		for (const { rect, glow, radius } of this.links) {
+			if (radius || glow < 0.05) continue;
 			const rx = rect.w / 2 + 34;
 			const ry = rect.h / 2 + 34;
 			const ex = (x - rect.x - rect.w / 2) / rx;
@@ -515,7 +489,9 @@ export class Sky {
 			sy += (dy + dx * along * 0.7) * dist * strength;
 			weight += dist * strength;
 		};
-		for (const link of this.links) if (link.glow > 0.05) around(link.rect, FLOW_MARGIN, link.glow);
+		for (const link of this.links) {
+			if (!link.radius && link.glow > 0.05) around(link.rect, FLOW_MARGIN, link.glow);
+		}
 		return weight ? { x: sx * FLOW_WEIGHT, y: sy * FLOW_WEIGHT, weight: Math.min(1, weight) * FLOW_WEIGHT } : null;
 	}
 
@@ -548,7 +524,7 @@ export class Sky {
 			if (b.flight > 0.02) {
 				b.flap += dt / 0.14;
 				ctx.globalAlpha = flapAlpha(b.flap) * b.flight * 0.85;
-				wings(ctx, b.x, b.y, radius * 2.6, b.heading, 40 * DEG, 130 * DEG);
+				wings(ctx, b.x, b.y, radius * WING_REACH, b.heading, WING_START, WING_ARC);
 			}
 			ctx.globalAlpha = alpha;
 			ctx.beginPath();
