@@ -1,15 +1,6 @@
 import { layoutWord } from './letters';
-import {
-	BACKGROUND,
-	BUTTERFLIES,
-	BUTTERFLY_LOOK,
-	FLOCKS,
-	MOON,
-	REFERENCE_AREA,
-	type FlockSpec,
-	type Look,
-	type Rgba
-} from './scene';
+import { DUSK, type Palette, type Rgb, type Rgba } from './palette';
+import { BUTTERFLIES, BUTTERFLY_LOOK, FLOCKS, REFERENCE_AREA, type FlockSpec, type Look, type Species } from './scene';
 
 const DEG = Math.PI / 180;
 const TAU = Math.PI * 2;
@@ -23,7 +14,7 @@ const BORB_ARRIVE = 5;
 
 const rand = (min: number, max: number) => min + Math.random() * (max - min);
 const randInt = (min: number, max: number) => Math.floor(rand(min, max + 1));
-const rgb = (c: Rgba | [number, number, number]) => `rgb(${c[0]},${c[1]},${c[2]})`;
+const rgb = (c: Rgba | Rgb) => `rgb(${c[0]},${c[1]},${c[2]})`;
 
 interface Boid {
 	x: number;
@@ -39,9 +30,12 @@ interface Boid {
 	fill: string;
 	alpha: number;
 	phase: boolean;
+	/** Where this bird falls in each of the palette's butterfly ranges. */
+	tint: [number, number, number];
 }
 
 interface Flock {
+	species: Species;
 	boids: Boid[];
 	speed: number;
 	alignmentRadius: number;
@@ -103,7 +97,29 @@ export class Sky {
 	private populated = false;
 	private scale = 1;
 
-	constructor(private word: string) {}
+	private ground: { style: string | CanvasGradient; height: number } | null = null;
+
+	constructor(
+		private word: string,
+		private palette: Palette = DUSK
+	) {}
+
+	paint(palette: Palette) {
+		this.palette = palette;
+		this.ground = null;
+		const mix = ([min, max]: [number, number], t: number) => min + (max - min) * t;
+		const { hue, saturation, lightness } = palette.butterflies;
+		for (const b of this.butterflies) {
+			b.fill = `hsl(${mix(hue, b.tint[0]) % 360} ${mix(saturation, b.tint[1])}% ${mix(lightness, b.tint[2])}%)`;
+		}
+		for (const flock of this.flocks) {
+			const color = palette.birds[flock.species];
+			for (const b of flock.boids) {
+				b.fill = rgb(color);
+				b.alpha = color[3] / 255;
+			}
+		}
+	}
 
 	resize(width: number, height: number) {
 		const first = !this.populated;
@@ -167,12 +183,12 @@ export class Sky {
 
 	draw(ctx: CanvasRenderingContext2D, dt: number, clear = false) {
 		ctx.globalAlpha = clear ? 1 : 1 - Math.pow(1 - TRAIL, dt * 60);
-		ctx.fillStyle = rgb(BACKGROUND);
+		ctx.fillStyle = this.sky(ctx);
 		ctx.fillRect(0, 0, this.width, this.height);
 
 		const moon = this.moon;
-		const moonAlpha = MOON[3] / 255;
-		ctx.fillStyle = rgb(MOON);
+		const moonAlpha = this.palette.moon[3] / 255;
+		ctx.fillStyle = rgb(this.palette.moon);
 		ctx.globalAlpha = moonAlpha * 0.9 * moon.halo;
 		ctx.beginPath();
 		ctx.arc(moon.x, moon.y, moon.size * 1.15, 0, TAU);
@@ -186,7 +202,7 @@ export class Sky {
 		for (const flock of this.flocks) for (const b of flock.boids) this.drawBoid(ctx, b, dt);
 
 		const radius = this.cell * 0.42;
-		ctx.fillStyle = rgb(MOON);
+		ctx.fillStyle = rgb(this.palette.letters);
 		for (const b of this.borbs) {
 			if (b.flight > 0.02) {
 				b.flap += dt / 0.14;
@@ -199,6 +215,20 @@ export class Sky {
 			ctx.fill();
 		}
 		ctx.globalAlpha = 1;
+	}
+
+	private sky(ctx: CanvasRenderingContext2D) {
+		if (this.ground?.height !== this.height) {
+			const [top, bottom] = this.palette.sky;
+			let style: string | CanvasGradient = rgb(top);
+			if (rgb(top) !== rgb(bottom)) {
+				style = ctx.createLinearGradient(0, 0, 0, this.height);
+				style.addColorStop(0, rgb(top));
+				style.addColorStop(1, rgb(bottom));
+			}
+			this.ground = { style, height: this.height };
+		}
+		return this.ground.style;
 	}
 
 	private moonAnchor(): Point {
@@ -218,18 +248,15 @@ export class Sky {
 		this.moon.vy = Math.sin(drift) * 2;
 
 		for (let i = 0; i < scaled(BUTTERFLIES); i++) {
-			const hue = rand(250, 400) % 360;
 			this.butterflies.push(
 				this.spawn(
 					{
-						color: [0, 0, 0, 255],
 						wingSize: BUTTERFLY_LOOK.wingSize,
 						wingStart: randInt(...BUTTERFLY_LOOK.wingStart),
 						wingArc: randInt(...BUTTERFLY_LOOK.wingArc)
 					},
 					1,
-					false,
-					`hsl(${hue} ${rand(35, 70)}% ${rand(55, 78)}%)`
+					false
 				)
 			);
 		}
@@ -238,9 +265,10 @@ export class Sky {
 			const flocks = spec.flocks[1] === 1 ? 1 : scaled(randInt(...spec.flocks));
 			for (let i = 0; i < flocks; i++) this.flocks.push(this.spawnFlock(spec));
 		}
+		this.paint(this.palette);
 	}
 
-	private spawn(look: Look, size: number, phase: boolean, fill = rgb(look.color)): Boid {
+	private spawn(look: Look, size: number, phase: boolean): Boid {
 		return {
 			x: rand(0, this.width),
 			y: rand(0, this.height),
@@ -252,9 +280,10 @@ export class Sky {
 			wingArc: look.wingArc * DEG,
 			flapPeriod: look.flapPeriod ?? -1,
 			flap: rand(0, 10),
-			fill,
-			alpha: look.color[3] / 255,
-			phase
+			fill: '',
+			alpha: 1,
+			phase,
+			tint: [Math.random(), Math.random(), Math.random()]
 		};
 	}
 
@@ -265,6 +294,7 @@ export class Sky {
 			this.spawn(spec.look, Math.max(1, spec.size + randInt(-1, 1)), i < phasers)
 		);
 		return {
+			species: spec.species,
 			boids,
 			speed: rand(...spec.speed),
 			alignmentRadius: 200,

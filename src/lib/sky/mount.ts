@@ -1,12 +1,13 @@
+import { DUSK, type Palette } from './palette';
 import { Sky } from './sky';
 
 const MAX_PIXEL_RATIO = 2;
 const MAX_STEP = 0.05;
 
 /** Runs the sky on `canvas` until the returned function is called. */
-export function mountSky(canvas: HTMLCanvasElement, word = 'birdorbs'): () => void {
+export function mountSky(canvas: HTMLCanvasElement, word = 'birdorbs', palette: Palette = DUSK): () => void {
 	const ctx = canvas.getContext('2d', { alpha: false })!;
-	const sky = new Sky(word);
+	const sky = new Sky(word, palette);
 	const still = matchMedia('(prefers-reduced-motion: reduce)');
 	let frame = 0;
 	let last = 0;
