@@ -113,7 +113,7 @@ export class Sky {
 	width = 0;
 	height = 0;
 	cursor: Point | null = null;
-	linkStyle: LinkStyle = 'tighten';
+	linkStyle: LinkStyle = 'flow';
 
 	private moon = { x: 0, y: 0, vx: 0, vy: 0, size: 0, halo: rand(0.3, 0.6) };
 	private butterflies: Boid[] = [];
@@ -183,9 +183,9 @@ export class Sky {
 		this.moon.x = anchor.x + (first ? 0 : dx);
 		this.moon.y = anchor.y + (first ? 0 : dy);
 
-		const { cell, bottom, homes } = layoutWord(this.word, width, height);
+		const { cell, homes } = layoutWord(this.word, width, height);
 		this.cell = cell;
-		const placed = this.placeLinks(cell, bottom);
+		const placed = this.placeLinks(cell);
 		if (first) {
 			this.populate();
 			this.borbs = this.hatch(homes, null, 0.3);
@@ -256,7 +256,7 @@ export class Sky {
 			const { glow } = link;
 			let radius = link.cell * 0.42;
 			let alpha = 0.95;
-			if (this.linkStyle === 'ruffle') {
+			if (this.linkStyle === 'ruffle' || this.linkStyle === 'flow') {
 				radius *= 1 + 0.3 * glow;
 				if (glow > 0.02) {
 					for (const b of link.borbs) {
@@ -304,8 +304,8 @@ export class Sky {
 		});
 	}
 
-	/** Links sit under the wordmark: side by side on a wide screen, stacked on a tall one. */
-	private placeLinks(wordCell: number, wordBottom: number) {
+	/** Links sit along the bottom of the page: side by side on a wide screen, stacked on a tall one. */
+	private placeLinks(wordCell: number) {
 		const { width, height } = this;
 		const columns = this.linkWords.map(columnsOf);
 		if (!columns.length) return [];
@@ -314,7 +314,8 @@ export class Sky {
 			? Math.max(...columns)
 			: columns.reduce((n, c) => n + c, 0) + LINK_GAP_COLUMNS * (columns.length - 1);
 		const cell = Math.min(wordCell * (stacked ? 0.75 : 0.5), (width * 0.8) / span, 11);
-		const top = wordBottom + Math.max(26, 2.4 * wordCell);
+		const rows = stacked ? columns.length * (ROWS + 3) - 3 : ROWS;
+		const top = height - Math.max(36, height * 0.08) - (rows - 0.5) * cell;
 		let left = (width - (span - 1) * cell) / 2;
 		return this.linkWords.map((word, i) => {
 			const x = stacked ? (width - (columns[i] - 1) * cell) / 2 : left;
@@ -427,8 +428,8 @@ export class Sky {
 	private restOffset(b: Borb): Point {
 		const t = this.time;
 		const link = b.link;
-		if (link && this.linkStyle === 'ruffle') {
-			const reach = link.cell * 0.14 * link.glow;
+		if (link && (this.linkStyle === 'ruffle' || this.linkStyle === 'flow')) {
+			const reach = link.cell * 0.2 * link.glow;
 			return { x: Math.cos(t * 13 + b.seed) * reach, y: Math.sin(t * 17 + b.seed * 2) * reach };
 		}
 		if (link && this.linkStyle === 'hop') {
@@ -473,7 +474,7 @@ export class Sky {
 
 	private moonAnchor(): Point {
 		const portrait = this.height > this.width;
-		return { x: this.width * (portrait ? 0.62 : 0.7), y: this.height * (portrait ? 0.62 : 0.64) };
+		return { x: this.width * (portrait ? 0.62 : 0.7), y: this.height * (portrait ? 0.48 : 0.52) };
 	}
 
 	private populate() {
@@ -741,7 +742,7 @@ export class Sky {
 			rate = BORB_ARRIVE;
 		}
 
-		const cursor = this.cursor;
+		const cursor = b.link ? null : this.cursor;
 		if (cursor) {
 			const dx = b.x - cursor.x;
 			const dy = b.y - cursor.y;
