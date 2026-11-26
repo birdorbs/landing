@@ -19,6 +19,7 @@ const GLYPHS: Record<string, string[]> = {
 
 export const BASELINE_ROWS = 7;
 export const ROWS = 9;
+const X_HEIGHT_MIDDLE = 4;
 const MAX_CELL = 22;
 
 export interface Point {
@@ -29,6 +30,8 @@ export interface Point {
 export interface WordLayout {
 	cell: number;
 	homes: Point[];
+	/** The middle of each letter's x-height box. */
+	letters: Point[];
 }
 
 const glyphsOf = (word: string) => [...word].map((ch) => GLYPHS[ch]);
@@ -59,6 +62,12 @@ export function layoutWord(word: string, width: number, height: number): WordLay
 	const columns = columnsOf(word);
 	const cell = Math.min((width * 0.88) / columns, (height * 0.2) / BASELINE_ROWS, MAX_CELL);
 	const left = (width - (columns - 1) * cell) / 2;
-	const top = Math.max(36, height * 0.09) + cell / 2;
-	return { cell, homes: placeWord(word, left, top, cell) };
+	const top = Math.max(56, height * 0.15) + cell / 2;
+	let column = 0;
+	const letters = glyphsOf(word).map((glyph) => {
+		const centre = { x: left + (column + (glyph[0].length - 1) / 2) * cell, y: top + X_HEIGHT_MIDDLE * cell };
+		column += glyph[0].length + 1;
+		return centre;
+	});
+	return { cell, homes: placeWord(word, left, top, cell), letters };
 }

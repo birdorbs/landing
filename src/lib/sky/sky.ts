@@ -151,6 +151,8 @@ export class Sky {
 	cursor: Point | null = null;
 	linkStyle: LinkStyle = 'flow';
 
+	/** The moon rests behind the word's "o", or off to one side of a word without one. */
+	private moonAnchor: Point = { x: 0, y: 0 };
 	private moon = { x: 0, y: 0, vx: 0, vy: 0, size: 0, halo: rand(0.3, 0.6) };
 	private butterflies: Boid[] = [];
 	private flocks: Flock[] = [];
@@ -210,18 +212,21 @@ export class Sky {
 
 	resize(width: number, height: number) {
 		const first = !this.populated;
-		const dx = this.moon.x - this.moonAnchor().x;
-		const dy = this.moon.y - this.moonAnchor().y;
+		const dx = this.moon.x - this.moonAnchor.x;
+		const dy = this.moon.y - this.moonAnchor.y;
 		this.width = width;
 		this.height = height;
 
-		const anchor = this.moonAnchor();
-		this.moon.size = Math.max(40, Math.min(100, Math.min(width, height) * 0.15));
-		this.moon.x = anchor.x + (first ? 0 : dx);
-		this.moon.y = anchor.y + (first ? 0 : dy);
-
-		const { cell, homes } = layoutWord(this.word, width, height);
+		const { cell, homes, letters } = layoutWord(this.word, width, height);
 		this.cell = cell;
+		const portrait = height > width;
+		this.moonAnchor = letters[this.word.indexOf('o')] ?? {
+			x: width * (portrait ? 0.62 : 0.7),
+			y: height * (portrait ? 0.48 : 0.52)
+		};
+		this.moon.size = Math.max(40, Math.min(100, Math.min(width, height) * 0.15));
+		this.moon.x = this.moonAnchor.x + (first ? 0 : dx);
+		this.moon.y = this.moonAnchor.y + (first ? 0 : dy);
 		const placed = this.placeLinks(cell);
 		if (first) {
 			this.populate();
@@ -289,8 +294,13 @@ export class Sky {
 		for (const b of this.butterflies) this.drawBoid(ctx, b, dt);
 		for (const flock of this.flocks) for (const b of flock.boids) this.drawBoid(ctx, b, dt);
 
-		ctx.fillStyle = rgb(this.palette.letters);
-		this.drawBorbs(ctx, this.borbs, this.cell * 0.42, 0.95, dt);
+		const onSky = rgb(this.palette.letters);
+		const onMoon = rgb(this.palette.lettersOnMoon);
+		const disc2 = moon.size * moon.size;
+		this.drawBorbs(ctx, this.borbs, this.cell * 0.42, 0.95, dt, (b) =>
+			(b.x - moon.x) ** 2 + (b.y - moon.y) ** 2 < disc2 ? onMoon : onSky
+		);
+		ctx.fillStyle = onSky;
 		for (const [index, link] of this.links.entries()) {
 			if (link.radius) {
 				this.drawMark(ctx, link, index, dt);
@@ -538,8 +548,16 @@ export class Sky {
 		return { x: Math.cos(t * 0.9 + b.seed) * bob, y: Math.sin(t * 1.3 + b.seed) * bob };
 	}
 
-	private drawBorbs(ctx: CanvasRenderingContext2D, borbs: Borb[], radius: number, alpha: number, dt: number) {
+	private drawBorbs(
+		ctx: CanvasRenderingContext2D,
+		borbs: Borb[],
+		radius: number,
+		alpha: number,
+		dt: number,
+		fill?: (b: Borb) => string
+	) {
 		for (const b of borbs) {
+			if (fill) ctx.fillStyle = fill(b);
 			if (b.flight > 0.02) {
 				b.flap += dt / 0.14;
 				ctx.globalAlpha = flapAlpha(b.flap) * b.flight * 0.85;
@@ -566,10 +584,6 @@ export class Sky {
 		return this.ground.style;
 	}
 
-	private moonAnchor(): Point {
-		const portrait = this.height > this.width;
-		return { x: this.width * (portrait ? 0.62 : 0.7), y: this.height * (portrait ? 0.48 : 0.52) };
-	}
 
 	private populate() {
 		this.populated = true;
@@ -647,7 +661,7 @@ export class Sky {
 
 	private stepMoon(dt: number) {
 		const moon = this.moon;
-		const anchor = this.moonAnchor();
+		const anchor = this.moonAnchor;
 		moon.x += moon.vx * dt;
 		moon.y += moon.vy * dt;
 		if (Math.abs(moon.x - anchor.x) > 30) moon.vx = -Math.sign(moon.x - anchor.x) * Math.abs(moon.vx);

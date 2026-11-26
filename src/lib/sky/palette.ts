@@ -9,6 +9,8 @@ export interface Palette {
 	sky: [Rgb, Rgb];
 	moon: Rgba;
 	letters: Rgb;
+	/** A letter dot takes this color while it sits on the moon's disc. */
+	lettersOnMoon: Rgb;
 	/** Third-party marks keep their owner's white or black instead of taking the letters' color. */
 	mark: Rgb;
 	birds: Record<Species, Rgba>;
@@ -22,6 +24,7 @@ export const TWILIGHT: Palette = {
 	],
 	moon: [246, 212, 208, 205],
 	letters: [242, 234, 216],
+	lettersOnMoon: [58, 42, 66],
 	mark: [255, 255, 255],
 	birds: {
 		bats: [18, 14, 28, 255],
@@ -42,6 +45,7 @@ export const DUSK_PAPER: Palette = {
 	],
 	moon: [247, 224, 202, 255],
 	letters: [38, 30, 50],
+	lettersOnMoon: [38, 30, 50],
 	mark: [31, 35, 40],
 	birds: {
 		bats: [126, 115, 146, 255],
