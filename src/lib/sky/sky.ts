@@ -61,6 +61,8 @@ interface Boid {
 	wingSize: number;
 	wingStart: number;
 	wingArc: number;
+	tailSize: number;
+	tailSpread: number;
 	flapPeriod: number;
 	flap: number;
 	fill: string;
@@ -580,6 +582,8 @@ export class Sky {
 			wingSize: (look.wingSize ?? size * 3) * this.scale,
 			wingStart: look.wingStart * DEG,
 			wingArc: look.wingArc * DEG,
+			tailSize: (look.tail?.[0] ?? 0) * size * this.scale,
+			tailSpread: (look.tail?.[1] ?? 0) * DEG,
 			flapPeriod: look.flapPeriod ?? -1,
 			flap: rand(0, 10),
 			fill: '',
@@ -836,8 +840,16 @@ export class Sky {
 		ctx.fillStyle = b.fill;
 		const folded = b.perch ? Math.min(1, Math.hypot(b.vx, b.vy) / 60) : 1;
 		ctx.globalAlpha = flapAlpha(b.flap) * b.alpha * folded;
-		wings(ctx, b.x, b.y, b.wingSize, Math.atan2(b.vy, b.vx), b.wingStart, b.wingArc);
+		const heading = Math.atan2(b.vy, b.vx);
+		wings(ctx, b.x, b.y, b.wingSize, heading, b.wingStart, b.wingArc);
 		ctx.globalAlpha = b.alpha;
+		if (b.tailSize) {
+			const back = heading + Math.PI;
+			ctx.beginPath();
+			ctx.moveTo(b.x, b.y);
+			ctx.arc(b.x, b.y, b.tailSize, back - b.tailSpread / 2, back + b.tailSpread / 2);
+			ctx.fill();
+		}
 		ctx.beginPath();
 		ctx.arc(b.x, b.y, b.size, 0, TAU);
 		ctx.fill();
