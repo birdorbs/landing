@@ -15,8 +15,5 @@
 		width: 100%;
 		height: 100%;
 		touch-action: none;
-		user-select: none;
-		-webkit-user-select: none;
-		-webkit-touch-callout: none;
 	}
 </style>

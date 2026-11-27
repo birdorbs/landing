@@ -22,6 +22,9 @@
 	main {
 		position: fixed;
 		inset: 0;
+		user-select: none;
+		-webkit-user-select: none;
+		-webkit-touch-callout: none;
 	}
 
 	h1 {

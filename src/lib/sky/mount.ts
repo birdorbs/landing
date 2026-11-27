@@ -27,7 +27,7 @@ export interface SkyLink extends Omit<LinkSpec, 'corner'> {
  * Runs the sky on `canvas` until the returned function is called. Each link is drawn in the sky with a real
  * anchor laid over it in the canvas's parent, and so is a button that switches between light and dark. A touch
  * has no hover, so a tapped link stays lit for a moment after the finger lifts, and one that is opening its page
- * stays lit until the page is hidden. Every finger on the page is its own pointer to the birds. The
+ * stays lit until the page is hidden. The birds make way for every finger on the page. The
  * palette follows the system color scheme until that button is pressed; the choice is kept in `localStorage`
  * and mirrored to `data-theme` on the root element.
  */
@@ -41,7 +41,7 @@ export function mountSky(canvas: HTMLCanvasElement, word = 'birdorbs', links: Sk
 	const palette = () => (theme() === 'light' ? DUSK_PAPER : TWILIGHT);
 	const sky = new Sky(word, palette(), [
 		...links.map(({ text, mark }) => ({ text, mark })),
-		{ text: 'theme', mark: CONTRAST_MARK, corner: 'left' }
+		{ text: 'theme', mark: CONTRAST_MARK, corner: 'top-left' }
 	]);
 	let pointed = -1;
 	let focused = -1;
@@ -55,7 +55,7 @@ export function mountSky(canvas: HTMLCanvasElement, word = 'birdorbs', links: Sk
 	const overlay = <T extends HTMLElement>(control: T, label: string, i: number): T => {
 		control.setAttribute('aria-label', label);
 		control.style.cssText =
-			'position:absolute;padding:0;border:0;background:none;border-radius:8px;cursor:pointer;touch-action:none;-webkit-tap-highlight-color:transparent';
+			'position:absolute;padding:0;border:0;background:none;border-radius:8px;cursor:pointer;touch-action:none;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:default';
 		control.addEventListener('focus', () => {
 			if (!control.matches(':focus-visible')) return;
 			focused = i;
@@ -161,24 +161,14 @@ export function mountSky(canvas: HTMLCanvasElement, word = 'birdorbs', links: Sk
 		sky.touch(e.pointerId, at.x, at.y);
 		if (e.isPrimary) point(at);
 	};
-	const onDown = (e: PointerEvent) => {
-		const at = local(e);
-		sky.touch(e.pointerId, at.x, at.y, e.pointerType !== 'mouse');
-		if (e.isPrimary) point(at);
-		if (e.pointerType !== 'mouse' && !(e.isPrimary && pointed >= 0)) sky.startle(at.x, at.y);
-	};
 	const onLeave = (e: PointerEvent) => {
-		if (e.pointerType === 'touch') return;
+		if (e.pointerType === 'touch' && e.type === 'pointerleave') return;
 		sky.lift(e.pointerId);
-		point(null);
-	};
-	const onCancel = (e: PointerEvent) => {
-		sky.lift(e.pointerId, true);
 		if (e.isPrimary) point(null);
 	};
 	const onUp = (e: PointerEvent) => {
 		if (e.pointerType === 'mouse') return;
-		sky.lift(e.pointerId, true);
+		sky.lift(e.pointerId);
 		if (!e.isPrimary) return;
 		const lifted = pointed;
 		pointed = -1;
@@ -189,6 +179,11 @@ export function mountSky(canvas: HTMLCanvasElement, word = 'birdorbs', links: Sk
 	};
 	const onHide = () => {
 		if (document.hidden) letGo();
+		run();
+	};
+	/** Safari keeps the page as it was left for the back swipe, and may restore it without a visibility change. */
+	const onShow = () => {
+		letGo();
 		run();
 	};
 	const onMotion = () => {
@@ -204,10 +199,12 @@ export function mountSky(canvas: HTMLCanvasElement, word = 'birdorbs', links: Sk
 	observer.observe(canvas);
 	addEventListener('pointermove', onMove);
 	document.documentElement.addEventListener('pointerleave', onLeave);
-	addEventListener('pointercancel', onCancel);
-	addEventListener('pointerdown', onDown);
+	addEventListener('pointercancel', onLeave);
+	addEventListener('pointerdown', onMove);
 	addEventListener('pointerup', onUp);
 	document.addEventListener('visibilitychange', onHide);
+	addEventListener('pagehide', letGo);
+	addEventListener('pageshow', onShow);
 	still.addEventListener('change', onMotion);
 	light.addEventListener('change', onScheme);
 	fit();
@@ -220,10 +217,12 @@ export function mountSky(canvas: HTMLCanvasElement, word = 'birdorbs', links: Sk
 		for (const anchor of anchors) anchor.remove();
 		removeEventListener('pointermove', onMove);
 		document.documentElement.removeEventListener('pointerleave', onLeave);
-		removeEventListener('pointercancel', onCancel);
-		removeEventListener('pointerdown', onDown);
+		removeEventListener('pointercancel', onLeave);
+		removeEventListener('pointerdown', onMove);
 		removeEventListener('pointerup', onUp);
 		document.removeEventListener('visibilitychange', onHide);
+		removeEventListener('pagehide', letGo);
+		removeEventListener('pageshow', onShow);
 		still.removeEventListener('change', onMotion);
 		light.removeEventListener('change', onScheme);
 	};
