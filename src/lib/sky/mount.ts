@@ -54,8 +54,9 @@ export function mountSky(canvas: HTMLCanvasElement, word = 'birdorbs', links: Sk
 	};
 	const overlay = <T extends HTMLElement>(control: T, label: string, i: number): T => {
 		control.setAttribute('aria-label', label);
+		control.draggable = false;
 		control.style.cssText =
-			'position:absolute;padding:0;border:0;background:none;border-radius:8px;cursor:pointer;touch-action:none;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:default';
+			'position:absolute;padding:0;border:0;background:none;border-radius:8px;cursor:pointer;touch-action:none;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;-webkit-user-drag:none';
 		control.addEventListener('focus', () => {
 			if (!control.matches(':focus-visible')) return;
 			focused = i;
@@ -73,6 +74,8 @@ export function mountSky(canvas: HTMLCanvasElement, word = 'birdorbs', links: Sk
 	const anchors: HTMLElement[] = links.map(({ text, href }, i) => {
 		const anchor = document.createElement('a');
 		anchor.href = href;
+		anchor.target = '_blank';
+		anchor.rel = 'noopener';
 		anchor.addEventListener('click', () => {
 			if (held === i) clearTimeout(linger);
 		});
