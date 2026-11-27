@@ -35,7 +35,7 @@ export const FLOCKS: FlockSpec[] = [
 	{
 		species: 'bats',
 		look: { wingStart: 40, wingArc: 130 },
-		flocks: [3, 3],
+		flocks: [4, 4],
 		count: [14, 17],
 		speed: [50, 70],
 		size: 7,

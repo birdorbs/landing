@@ -45,7 +45,7 @@ export const DUSK_PAPER: Palette = {
 		hummingbirds: [160, 152, 216, 255],
 		cardinals: [222, 148, 166, 255],
 		budgerigars: [236, 188, 148, 255],
-		doves: [226, 70, 58, 255]
+		doves: [255, 255, 255, 255]
 	},
 	butterflies: { hue: [285, 390], saturation: [30, 50], lightness: [62, 76] }
 };
