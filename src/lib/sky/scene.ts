@@ -59,7 +59,7 @@ export const FLOCKS: FlockSpec[] = [
 	{
 		species: 'hummingbirds',
 		look: { wingStart: 55, wingArc: 160, flapPeriod: 0.05, tail: [2.4, 30] },
-		flocks: [3, 3],
+		flocks: [4, 4],
 		count: [14, 17],
 		speed: [150, 150],
 		size: 4,

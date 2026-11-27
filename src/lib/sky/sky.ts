@@ -29,6 +29,8 @@ const PERCHERS: Species[] = ['hummingbirds', 'cardinals', 'budgerigars', 'doves'
 /** What a link's letters and the birds around it do while the link is hovered or focused. */
 export type LinkStyle = 'ruffle' | 'perch' | 'gather' | 'hop' | 'tighten' | 'flow';
 
+export type Corner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+
 export interface Rect {
 	x: number;
 	y: number;
@@ -40,8 +42,8 @@ export interface Rect {
 export interface LinkSpec {
 	text: string;
 	mark?: string;
-	/** The bottom corner a mark sits in; right unless said. */
-	corner?: 'left' | 'right';
+	/** The corner a mark sits in; bottom right unless said. */
+	corner?: Corner;
 }
 
 interface Link {
@@ -145,7 +147,6 @@ function flapAlpha(flap: number) {
 export class Sky {
 	width = 0;
 	height = 0;
-	cursor: Point | null = null;
 	linkStyle: LinkStyle = 'flow';
 
 	/** The moon rests behind the word's "o", or off to one side of a word without one. */
@@ -159,6 +160,8 @@ export class Sky {
 	private cell = 0;
 	private time = 0;
 	private populated = false;
+	/** Where each pointer on the page is, by pointer id: a mouse, or every finger of a touch. */
+	private pointers = new Map<number, Point>();
 	private scale = 1;
 
 	private ground: { style: string | CanvasGradient; height: number } | null = null;
@@ -173,17 +176,22 @@ export class Sky {
 		return this.links.map((link) => link.rect);
 	}
 
-	hover(index: number, on: boolean) {
+	touch(id: number, x: number, y: number) {
+		this.pointers.set(id, { x, y });
+	}
+
+	lift(id: number) {
+		this.pointers.delete(id);
+	}
+
+	/** Lights or puts out a link. `from` is where the pointer met it; the swell spreads from there. */
+	hover(index: number, on: boolean, from?: Point) {
 		const link = this.links[index];
 		if (on && !link.hovered) {
 			const { rect } = link;
 			const inside =
-				this.cursor &&
-				this.cursor.x >= rect.x &&
-				this.cursor.x <= rect.x + rect.w &&
-				this.cursor.y >= rect.y &&
-				this.cursor.y <= rect.y + rect.h;
-			link.origin = inside ? { ...this.cursor! } : { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 };
+				from && from.x >= rect.x && from.x <= rect.x + rect.w && from.y >= rect.y && from.y <= rect.y + rect.h;
+			link.origin = inside ? { ...from } : { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 };
 			link.hoverAge = 0;
 		}
 		link.hovered = on;
@@ -370,7 +378,7 @@ export class Sky {
 
 	/**
 	 * Word links sit along the bottom of the page, side by side on a wide screen and stacked on a tall one.
-	 * Mark links are orbs in the bottom corners.
+	 * Mark links are orbs in the corners.
 	 */
 	private placeLinks(wordCell: number) {
 		const { width, height } = this;
@@ -387,14 +395,18 @@ export class Sky {
 
 		const radius = Math.max(16, Math.min(24, Math.min(width, height) * 0.035));
 		const margin = Math.max(20, Math.min(width, height) * 0.04);
-		const orbX = { left: margin + radius, right: width - margin - radius };
+		const taken: Partial<Record<Corner, number>> = {};
 
 		let word = 0;
 		return this.linkSpecs.map((spec) => {
 			if (spec.mark) {
-				const corner = spec.corner ?? 'right';
-				const home = { x: orbX[corner], y: height - margin - radius };
-				orbX[corner] += (radius * 2 + 16) * (corner === 'left' ? 1 : -1);
+				const corner = spec.corner ?? 'bottom-right';
+				const inset = margin + radius + (taken[corner] ?? 0);
+				taken[corner] = (taken[corner] ?? 0) + radius * 2 + 16;
+				const home = {
+					x: corner.endsWith('left') ? inset : width - inset,
+					y: corner.startsWith('top') ? margin + radius : height - margin - radius
+				};
 				const reach = radius + 8;
 				return {
 					cell: radius * 0.4,
@@ -522,9 +534,9 @@ export class Sky {
 		return weight ? { x: sx * FLOW_WEIGHT, y: sy * FLOW_WEIGHT, weight: Math.min(1, weight) * FLOW_WEIGHT } : null;
 	}
 
-	/** Birds leave the cursor alone while they circle a hovered link. */
-	private get birdCursor() {
-		return (this.linkStyle === 'gather' || this.linkStyle === 'flow') && this.hovering ? null : this.cursor;
+	/** Birds leave every pointer alone while they circle a hovered link. */
+	private get birdPointers(): Iterable<Point> {
+		return (this.linkStyle === 'gather' || this.linkStyle === 'flow') && this.hovering ? [] : this.pointers.values();
 	}
 
 	/** How swollen a link's dot is, 0 to 1: the swell spreads from where the hover began and ebbs all at once. */
@@ -679,7 +691,6 @@ export class Sky {
 	}
 
 	private stepButterfly(b: Boid, dt: number) {
-		const cursor = this.birdCursor;
 		const pull = this.gather(b.x, b.y);
 		if (pull) {
 			const speed = Math.hypot(b.vx, b.vy);
@@ -690,7 +701,7 @@ export class Sky {
 			b.vx *= scale;
 			b.vy *= scale;
 		}
-		if (cursor) {
+		for (const cursor of this.birdPointers) {
 			const dx = b.x - cursor.x;
 			const dy = b.y - cursor.y;
 			const dist = Math.hypot(dx, dy);
@@ -709,7 +720,7 @@ export class Sky {
 
 	private steer(flock: Flock, dt: number) {
 		const { boids, speed } = flock;
-		const cursor = this.birdCursor;
+		const cursors = [...this.birdPointers];
 		const next = new Float64Array(boids.length * 2);
 
 		for (let i = 0; i < boids.length; i++) {
@@ -768,7 +779,7 @@ export class Sky {
 				(cy / cohesion) * flock.cohesionWeight +
 				(py / separation) * flock.separationWeight;
 
-			if (cursor) {
+			for (const cursor of cursors) {
 				const dx = b.x - cursor.x;
 				const dy = b.y - cursor.y;
 				const dist = Math.hypot(dx, dy);
@@ -863,8 +874,7 @@ export class Sky {
 			rate = arrive;
 		}
 
-		const cursor = b.link ? null : this.cursor;
-		if (cursor) {
+		for (const cursor of b.link ? [] : this.pointers.values()) {
 			const dx = b.x - cursor.x;
 			const dy = b.y - cursor.y;
 			const dist = Math.hypot(dx, dy);
