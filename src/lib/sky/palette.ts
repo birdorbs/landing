@@ -31,7 +31,7 @@ export const TWILIGHT: Palette = {
 	butterflies: { hue: [285, 390], saturation: [25, 50], lightness: [60, 78] }
 };
 
-/** The wordmark is the darkest thing on the page, so birds crossing it never hide it. */
+/** The wordmark is the darkest thing on the page, so the birds drawn under it never hide it. */
 export const DUSK_PAPER: Palette = {
 	sky: [
 		[235, 233, 240],

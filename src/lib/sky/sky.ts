@@ -24,6 +24,8 @@ const GATHER_REACH = 3.2;
 const GATHER_WEIGHT = 900;
 const FLOW_WEIGHT = 1100;
 const FLOW_MARGIN = 26;
+/** Drawn last, over the wordmark and the links. */
+const TOPMOST: Species = 'doves';
 const PERCHERS: Species[] = ['hummingbirds', 'cardinals', 'budgerigars', 'doves'];
 
 /** What a link's letters and the birds around it do while the link is hovered or focused. */
@@ -311,7 +313,9 @@ export class Sky {
 		ctx.fill();
 
 		for (const b of this.butterflies) this.drawBoid(ctx, b, dt);
-		for (const flock of this.flocks) for (const b of flock.boids) this.drawBoid(ctx, b, dt);
+		for (const flock of this.flocks) {
+			if (flock.species !== TOPMOST) for (const b of flock.boids) this.drawBoid(ctx, b, dt);
+		}
 
 		ctx.fillStyle = rgb(this.palette.letters);
 		this.drawBorbs(ctx, this.borbs, this.cell * 0.42, 0.95, dt);
@@ -341,6 +345,9 @@ export class Sky {
 				alpha = 0.55 + 0.4 * glow;
 			}
 			this.drawBorbs(ctx, link.borbs, radius, alpha, dt, grow);
+		}
+		for (const flock of this.flocks) {
+			if (flock.species === TOPMOST) for (const b of flock.boids) this.drawBoid(ctx, b, dt);
 		}
 		ctx.globalAlpha = 1;
 	}
