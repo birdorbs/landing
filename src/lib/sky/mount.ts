@@ -27,7 +27,7 @@ export interface SkyLink extends Omit<LinkSpec, 'corner'> {
  * Runs the sky on `canvas` until the returned function is called. Each link is drawn in the sky with a real
  * anchor laid over it in the canvas's parent, and so is a button that switches between light and dark. A touch
  * has no hover, so a tapped link stays lit for a moment after the finger lifts, and one that is opening its page
- * stays lit until the page is hidden. The
+ * stays lit until the page is hidden. Every finger on the page is its own pointer to the birds. The
  * palette follows the system color scheme until that button is pressed; the choice is kept in `localStorage`
  * and mirrored to `data-theme` on the root element.
  */
@@ -140,7 +140,6 @@ export function mountSky(canvas: HTMLCanvasElement, word = 'birdorbs', links: Sk
 	};
 	/** A touch stays captured by the element it began on, so the link under the pointer is found by position. */
 	const point = (cursor: { x: number; y: number } | null) => {
-		sky.cursor = cursor;
 		const over = cursor
 			? sky.linkRects.findIndex(
 					(r) => cursor.x >= r.x && cursor.x <= r.x + r.w && cursor.y >= r.y && cursor.y <= r.y + r.h
@@ -154,13 +153,33 @@ export function mountSky(canvas: HTMLCanvasElement, word = 'birdorbs', links: Sk
 		}
 		if (over === pointed) return;
 		if (pointed >= 0 && pointed !== focused) sky.hover(pointed, false);
-		if (over >= 0) sky.hover(over, true);
+		if (over >= 0) sky.hover(over, true, cursor!);
 		pointed = over;
 	};
-	const onMove = (e: PointerEvent) => point(local(e));
-	const onLeave = () => point(null);
+	const onMove = (e: PointerEvent) => {
+		const at = local(e);
+		sky.touch(e.pointerId, at.x, at.y);
+		if (e.isPrimary) point(at);
+	};
+	const onDown = (e: PointerEvent) => {
+		const at = local(e);
+		sky.touch(e.pointerId, at.x, at.y, e.pointerType !== 'mouse');
+		if (e.isPrimary) point(at);
+		if (e.pointerType !== 'mouse' && !(e.isPrimary && pointed >= 0)) sky.startle(at.x, at.y);
+	};
+	const onLeave = (e: PointerEvent) => {
+		if (e.pointerType === 'touch') return;
+		sky.lift(e.pointerId);
+		point(null);
+	};
+	const onCancel = (e: PointerEvent) => {
+		sky.lift(e.pointerId, true);
+		if (e.isPrimary) point(null);
+	};
 	const onUp = (e: PointerEvent) => {
 		if (e.pointerType === 'mouse') return;
+		sky.lift(e.pointerId, true);
+		if (!e.isPrimary) return;
 		const lifted = pointed;
 		pointed = -1;
 		point(null);
@@ -185,8 +204,8 @@ export function mountSky(canvas: HTMLCanvasElement, word = 'birdorbs', links: Sk
 	observer.observe(canvas);
 	addEventListener('pointermove', onMove);
 	document.documentElement.addEventListener('pointerleave', onLeave);
-	addEventListener('pointercancel', onLeave);
-	addEventListener('pointerdown', onMove);
+	addEventListener('pointercancel', onCancel);
+	addEventListener('pointerdown', onDown);
 	addEventListener('pointerup', onUp);
 	document.addEventListener('visibilitychange', onHide);
 	still.addEventListener('change', onMotion);
@@ -201,8 +220,8 @@ export function mountSky(canvas: HTMLCanvasElement, word = 'birdorbs', links: Sk
 		for (const anchor of anchors) anchor.remove();
 		removeEventListener('pointermove', onMove);
 		document.documentElement.removeEventListener('pointerleave', onLeave);
-		removeEventListener('pointercancel', onLeave);
-		removeEventListener('pointerdown', onMove);
+		removeEventListener('pointercancel', onCancel);
+		removeEventListener('pointerdown', onDown);
 		removeEventListener('pointerup', onUp);
 		document.removeEventListener('visibilitychange', onHide);
 		still.removeEventListener('change', onMotion);
