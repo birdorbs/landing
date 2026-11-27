@@ -9,8 +9,6 @@ export interface Palette {
 	sky: [Rgb, Rgb];
 	moon: Rgba;
 	letters: Rgb;
-	/** Third-party marks keep their owner's white or black instead of taking the letters' color. */
-	mark: Rgb;
 	birds: Record<Species, Rgba>;
 	butterflies: { hue: Range; saturation: Range; lightness: Range };
 }
@@ -22,7 +20,6 @@ export const TWILIGHT: Palette = {
 	],
 	moon: [134, 96, 122, 255],
 	letters: [242, 234, 216],
-	mark: [255, 255, 255],
 	birds: {
 		bats: [18, 14, 28, 255],
 		spirits: [196, 176, 214, 60],
@@ -42,7 +39,6 @@ export const DUSK_PAPER: Palette = {
 	],
 	moon: [247, 224, 202, 255],
 	letters: [38, 30, 50],
-	mark: [31, 35, 40],
 	birds: {
 		bats: [126, 115, 146, 255],
 		spirits: [70, 56, 90, 30],

@@ -40,8 +40,6 @@ export interface Rect {
 export interface LinkSpec {
 	text: string;
 	mark?: string;
-	/** A brand mark keeps the palette's `mark` color; any other takes the letters' color. */
-	brand?: boolean;
 	/** The bottom corner a mark sits in; right unless said. */
 	corner?: 'left' | 'right';
 }
@@ -422,7 +420,6 @@ export class Sky {
 	private drawMark(ctx: CanvasRenderingContext2D, link: Link, index: number) {
 		const { rect, radius } = link;
 		const path = (this.marks[index] ??= new Path2D(this.linkSpecs[index].mark));
-		ctx.fillStyle = rgb(this.linkSpecs[index].brand ? this.palette.mark : this.palette.letters);
 		ctx.globalAlpha = MARK_REST_ALPHA + (1 - MARK_REST_ALPHA) * link.glow;
 		ctx.save();
 		ctx.translate(rect.x + rect.w / 2 - radius, rect.y + rect.h / 2 - radius);
