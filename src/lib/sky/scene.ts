@@ -2,6 +2,8 @@ export interface Look {
 	/** A wedge behind the body that fades half as far as the wings on each beat: its length in body radii and its spread in degrees. */
 	tail?: [number, number];
 	wingSize?: number;
+	/** The wings' length in body radii, where `wingSize` is not set. */
+	wingReach?: number;
 	wingStart: number;
 	wingArc: number;
 	flapPeriod?: number;
@@ -92,7 +94,7 @@ export const FLOCKS: FlockSpec[] = [
 	},
 	{
 		species: 'doves',
-		look: { wingStart: 30, wingArc: 170, tail: [2.7, 62] },
+		look: { wingReach: 2.5, wingStart: 30, wingArc: 170, tail: [2.8, 62] },
 		flocks: [1, 1],
 		count: [2, 2],
 		speed: [120, 120],

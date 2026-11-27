@@ -67,6 +67,7 @@ interface Link {
 const rand = (min: number, max: number) => min + Math.random() * (max - min);
 const randInt = (min: number, max: number) => Math.floor(rand(min, max + 1));
 const rgb = (c: Rgba | Rgb) => `rgb(${c[0]},${c[1]},${c[2]})`;
+const rgba = (c: Rgba) => `rgba(${c[0]},${c[1]},${c[2]},${c[3] / 255})`;
 
 interface Boid {
 	x: number;
@@ -83,6 +84,8 @@ interface Boid {
 	flap: number;
 	fill: string;
 	alpha: number;
+	/** A CSS color, or empty for no shadow. */
+	shadow: string;
 	phase: boolean;
 	/** Where this bird falls in each of the palette's butterfly ranges. */
 	tint: [number, number, number];
@@ -129,6 +132,9 @@ const BUZZ = 0.16;
 const FLAP_PEAK = 0.9;
 /** How far a tail fades over a wingbeat, as a share of how far the wings do. */
 const TAIL_FADE = 0.5;
+/** A bird's shadow in CSS pixels; the canvas applies neither to its transform, so the draw scales them. */
+const SHADOW_BLUR = 10;
+const SHADOW_DROP = 2;
 
 function wings(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, heading: number, start: number, arc: number) {
 	ctx.beginPath();
@@ -221,9 +227,11 @@ export class Sky {
 		}
 		for (const flock of this.flocks) {
 			const color = palette.birds[flock.species];
+			const shadow = palette.shadows?.[flock.species];
 			for (const b of flock.boids) {
 				b.fill = rgb(color);
 				b.alpha = color[3] / 255;
+				b.shadow = shadow ? rgba(shadow) : '';
 			}
 		}
 	}
@@ -653,7 +661,7 @@ export class Sky {
 			vx: rand(-1, 1) * 100,
 			vy: rand(-1, 1) * 100,
 			size: size * this.scale,
-			wingSize: (look.wingSize ?? size * 3) * this.scale,
+			wingSize: (look.wingSize ?? size * (look.wingReach ?? 3)) * this.scale,
 			wingStart: look.wingStart * DEG,
 			wingArc: look.wingArc * DEG,
 			tailSize: (look.tail?.[0] ?? 0) * size * this.scale,
@@ -662,6 +670,7 @@ export class Sky {
 			flap: rand(0, 10),
 			fill: '',
 			alpha: 1,
+			shadow: '',
 			phase,
 			tint: [Math.random(), Math.random(), Math.random()],
 			perch: null
@@ -911,6 +920,12 @@ export class Sky {
 		b.flap += dt / period;
 
 		ctx.fillStyle = b.fill;
+		if (b.shadow) {
+			const ratio = ctx.getTransform().a;
+			ctx.shadowColor = b.shadow;
+			ctx.shadowBlur = SHADOW_BLUR * this.scale * ratio;
+			ctx.shadowOffsetY = SHADOW_DROP * this.scale * ratio;
+		}
 		const folded = b.perch ? Math.min(1, Math.hypot(b.vx, b.vy) / 60) : 1;
 		const beat = flapAlpha(b.flap);
 		ctx.globalAlpha = beat * b.alpha * folded;
@@ -928,5 +943,10 @@ export class Sky {
 		ctx.beginPath();
 		ctx.arc(b.x, b.y, b.size, 0, TAU);
 		ctx.fill();
+		if (b.shadow) {
+			ctx.shadowColor = 'transparent';
+			ctx.shadowBlur = 0;
+			ctx.shadowOffsetY = 0;
+		}
 	}
 }

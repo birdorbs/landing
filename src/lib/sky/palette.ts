@@ -10,6 +10,8 @@ export interface Palette {
 	moon: Rgba;
 	letters: Rgb;
 	birds: Record<Species, Rgba>;
+	/** A soft shadow under a species too close to the sky's own lightness to show without one. */
+	shadows?: Partial<Record<Species, Rgba>>;
 	butterflies: { hue: Range; saturation: Range; lightness: Range };
 }
 
@@ -45,7 +47,8 @@ export const DUSK_PAPER: Palette = {
 		hummingbirds: [160, 152, 216, 255],
 		cardinals: [222, 148, 166, 255],
 		wrens: [236, 188, 148, 255],
-		doves: [255, 255, 255, 255]
+		doves: [255, 246, 228, 255]
 	},
+	shadows: { doves: [70, 50, 96, 190] },
 	butterflies: { hue: [285, 390], saturation: [30, 50], lightness: [62, 76] }
 };
