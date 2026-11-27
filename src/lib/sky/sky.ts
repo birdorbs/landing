@@ -67,7 +67,6 @@ interface Link {
 const rand = (min: number, max: number) => min + Math.random() * (max - min);
 const randInt = (min: number, max: number) => Math.floor(rand(min, max + 1));
 const rgb = (c: Rgba | Rgb) => `rgb(${c[0]},${c[1]},${c[2]})`;
-const rgba = (c: Rgba) => `rgba(${c[0]},${c[1]},${c[2]},${c[3] / 255})`;
 
 interface Boid {
 	x: number;
@@ -84,8 +83,8 @@ interface Boid {
 	flap: number;
 	fill: string;
 	alpha: number;
-	/** A CSS color, or empty for no shadow. */
-	shadow: string;
+	/** A CSS color, or empty for no outline. */
+	outline: string;
 	phase: boolean;
 	/** Where this bird falls in each of the palette's butterfly ranges. */
 	tint: [number, number, number];
@@ -132,9 +131,9 @@ const BUZZ = 0.16;
 const FLAP_PEAK = 0.9;
 /** How far a tail fades over a wingbeat, as a share of how far the wings do. */
 const TAIL_FADE = 0.5;
-/** A bird's shadow in CSS pixels; the canvas applies neither to its transform, so the draw scales them. */
-const SHADOW_BLUR = 10;
-const SHADOW_DROP = 2;
+const OUTLINE = 1.4;
+/** An outline fades with its wing, but no further than this, so the wing's shape survives the beat. */
+const OUTLINE_FLOOR = 0.45;
 
 function wings(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, heading: number, start: number, arc: number) {
 	ctx.beginPath();
@@ -145,6 +144,14 @@ function wings(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, h
 	ctx.arc(x, y, r, heading - start - arc, heading - start);
 	ctx.closePath();
 	ctx.fill();
+}
+
+/** Strokes the current path, which the caller has just filled. */
+function outline(ctx: CanvasRenderingContext2D) {
+	const alpha = ctx.globalAlpha;
+	ctx.globalAlpha = Math.max(alpha, OUTLINE_FLOOR);
+	ctx.stroke();
+	ctx.globalAlpha = alpha;
 }
 
 function flapAlpha(flap: number) {
@@ -227,11 +234,11 @@ export class Sky {
 		}
 		for (const flock of this.flocks) {
 			const color = palette.birds[flock.species];
-			const shadow = palette.shadows?.[flock.species];
+			const outline = palette.outlines?.[flock.species];
 			for (const b of flock.boids) {
 				b.fill = rgb(color);
 				b.alpha = color[3] / 255;
-				b.shadow = shadow ? rgba(shadow) : '';
+				b.outline = outline ? rgb(outline) : '';
 			}
 		}
 	}
@@ -670,7 +677,7 @@ export class Sky {
 			flap: rand(0, 10),
 			fill: '',
 			alpha: 1,
-			shadow: '',
+			outline: '',
 			phase,
 			tint: [Math.random(), Math.random(), Math.random()],
 			perch: null
@@ -920,33 +927,31 @@ export class Sky {
 		b.flap += dt / period;
 
 		ctx.fillStyle = b.fill;
-		if (b.shadow) {
-			const ratio = ctx.getTransform().a;
-			ctx.shadowColor = b.shadow;
-			ctx.shadowBlur = SHADOW_BLUR * this.scale * ratio;
-			ctx.shadowOffsetY = SHADOW_DROP * this.scale * ratio;
+		if (b.outline) {
+			ctx.strokeStyle = b.outline;
+			ctx.lineWidth = OUTLINE * this.scale;
+			ctx.lineJoin = 'round';
 		}
 		const folded = b.perch ? Math.min(1, Math.hypot(b.vx, b.vy) / 60) : 1;
 		const beat = flapAlpha(b.flap);
 		ctx.globalAlpha = beat * b.alpha * folded;
 		const heading = Math.atan2(b.vy, b.vx);
 		wings(ctx, b.x, b.y, b.wingSize, heading, b.wingStart, b.wingArc);
+		if (b.outline) outline(ctx);
 		if (b.tailSize) {
 			ctx.globalAlpha = b.alpha * (1 - TAIL_FADE * (1 - beat / FLAP_PEAK));
 			const back = heading + Math.PI;
 			ctx.beginPath();
 			ctx.moveTo(b.x, b.y);
 			ctx.arc(b.x, b.y, b.tailSize, back - b.tailSpread / 2, back + b.tailSpread / 2);
+			ctx.closePath();
 			ctx.fill();
+			if (b.outline) outline(ctx);
 		}
 		ctx.globalAlpha = b.alpha;
 		ctx.beginPath();
 		ctx.arc(b.x, b.y, b.size, 0, TAU);
 		ctx.fill();
-		if (b.shadow) {
-			ctx.shadowColor = 'transparent';
-			ctx.shadowBlur = 0;
-			ctx.shadowOffsetY = 0;
-		}
+		if (b.outline) outline(ctx);
 	}
 }
