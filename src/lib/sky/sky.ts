@@ -12,7 +12,10 @@ const CURSOR_WEIGHT = 700;
 const BORB_SPEED = 420;
 const BORB_ARRIVE = 5;
 /** How much a hovered link grows about its middle, dots and spacing alike. */
-const LINK_SWELL = 0.09;
+const LINK_SWELL = 0.12;
+/** The swell's front travels this many pixels a second and is this many pixels deep. */
+const SWELL_SPEED = 1100;
+const SWELL_FRONT = 70;
 /** A link's dots settle faster than the title's, so a hover answers at once. */
 const LINK_ARRIVE = 16;
 
@@ -53,6 +56,9 @@ interface Link {
 	hovered: boolean;
 	/** Eases toward 1 while hovered and back to 0 after. */
 	glow: number;
+	/** Where the current hover began and how long ago, for the swell that spreads from there. */
+	origin: Point;
+	hoverAge: number;
 	percher: Boid | null;
 }
 
@@ -171,6 +177,17 @@ export class Sky {
 
 	hover(index: number, on: boolean) {
 		const link = this.links[index];
+		if (on && !link.hovered) {
+			const { rect } = link;
+			const inside =
+				this.cursor &&
+				this.cursor.x >= rect.x &&
+				this.cursor.x <= rect.x + rect.w &&
+				this.cursor.y >= rect.y &&
+				this.cursor.y <= rect.y + rect.h;
+			link.origin = inside ? { ...this.cursor! } : { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 };
+			link.hoverAge = 0;
+		}
 		link.hovered = on;
 		if (this.linkStyle !== 'perch') return;
 		if (on) this.callPercher(link);
@@ -226,7 +243,7 @@ export class Sky {
 			this.borbs = this.hatch(homes, null, 0.3);
 			this.links = placed.map(({ rect, cell, radius, homes }, i) => {
 				const text = this.linkSpecs[i].text;
-				const link: Link = { text, radius, rect, cell, borbs: [], hovered: false, glow: 0, percher: null };
+				const link: Link = { text, radius, rect, cell, borbs: [], hovered: false, glow: 0, origin: { x: 0, y: 0 }, hoverAge: 0, percher: null };
 				link.borbs = this.hatch(homes, link, 1.3 + i * 0.3);
 				return link;
 			});
@@ -263,7 +280,10 @@ export class Sky {
 		for (const b of this.butterflies) this.stepButterfly(b, dt);
 		for (const flock of this.flocks) this.steer(flock, dt);
 		for (const flock of this.flocks) for (const b of flock.boids) this.move(b, dt);
-		for (const link of this.links) link.glow += ((link.hovered ? 1 : 0) - link.glow) * Math.min(1, 18 * dt);
+		for (const link of this.links) {
+			link.glow += ((link.hovered ? 1 : 0) - link.glow) * Math.min(1, 18 * dt);
+			link.hoverAge += dt;
+		}
 		for (const b of this.everyBorb()) this.stepBorb(b, dt);
 	}
 
@@ -297,8 +317,9 @@ export class Sky {
 			const { glow } = link;
 			let radius = link.cell * 0.42;
 			let alpha = 0.95;
+			let grow: ((b: Borb) => number) | undefined;
 			if (this.linkStyle === 'flow') {
-				radius *= 1 + LINK_SWELL * glow;
+				grow = (b) => 1 + LINK_SWELL * this.swellOf(b, link);
 			} else if (this.linkStyle === 'ruffle') {
 				radius *= 1 + 0.3 * glow;
 				if (glow > 0.02) {
@@ -313,7 +334,7 @@ export class Sky {
 				radius *= 0.8 + 0.2 * glow;
 				alpha = 0.55 + 0.4 * glow;
 			}
-			this.drawBorbs(ctx, link.borbs, radius, alpha, dt);
+			this.drawBorbs(ctx, link.borbs, radius, alpha, dt, grow);
 		}
 		ctx.globalAlpha = 1;
 	}
@@ -509,11 +530,18 @@ export class Sky {
 		return (this.linkStyle === 'gather' || this.linkStyle === 'flow') && this.hovering ? null : this.cursor;
 	}
 
+	/** How swollen a link's dot is, 0 to 1: the swell spreads from where the hover began and ebbs all at once. */
+	private swellOf(b: Borb, link: Link): number {
+		const reached = link.hoverAge * SWELL_SPEED - Math.hypot(b.hx - link.origin.x, b.hy - link.origin.y);
+		const front = Math.max(0, Math.min(1, reached / SWELL_FRONT + 1));
+		return link.hovered ? front : Math.min(front, link.glow);
+	}
+
 	private restOffset(b: Borb): Point {
 		const t = this.time;
 		const link = b.link;
 		if (link && this.linkStyle === 'flow') {
-			const swell = LINK_SWELL * link.glow;
+			const swell = LINK_SWELL * this.swellOf(b, link);
 			const { rect } = link;
 			return { x: (b.hx - rect.x - rect.w / 2) * swell, y: (b.hy - rect.y - rect.h / 2) * swell };
 		}
@@ -533,8 +561,16 @@ export class Sky {
 		return { x: Math.cos(t * 0.9 + b.seed) * bob, y: Math.sin(t * 1.3 + b.seed) * bob };
 	}
 
-	private drawBorbs(ctx: CanvasRenderingContext2D, borbs: Borb[], radius: number, alpha: number, dt: number) {
+	private drawBorbs(
+		ctx: CanvasRenderingContext2D,
+		borbs: Borb[],
+		size: number,
+		alpha: number,
+		dt: number,
+		grow?: (b: Borb) => number
+	) {
 		for (const b of borbs) {
+			const radius = grow ? size * grow(b) : size;
 			if (b.flight > 0.02) {
 				b.flap += dt / 0.14;
 				ctx.globalAlpha = flapAlpha(b.flap) * b.flight * 0.85;
