@@ -26,7 +26,7 @@ const FLOW_WEIGHT = 1100;
 const FLOW_MARGIN = 26;
 /** Drawn last, over the wordmark and the links. */
 const TOPMOST: Species = 'doves';
-const PERCHERS: Species[] = ['hummingbirds', 'cardinals', 'budgerigars', 'doves'];
+const PERCHERS: Species[] = ['hummingbirds', 'cardinals', 'wrens', 'doves'];
 
 /** What a link's letters and the birds around it do while the link is hovered or focused. */
 export type LinkStyle = 'ruffle' | 'perch' | 'gather' | 'hop' | 'tighten' | 'flow';

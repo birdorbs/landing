@@ -25,7 +25,7 @@ export const TWILIGHT: Palette = {
 		spirits: [196, 176, 214, 60],
 		hummingbirds: [152, 142, 212, 255],
 		cardinals: [202, 114, 132, 255],
-		budgerigars: [228, 172, 130, 255],
+		wrens: [212, 148, 100, 255],
 		doves: [255, 190, 200, 255]
 	},
 	butterflies: { hue: [285, 390], saturation: [25, 50], lightness: [60, 78] }
@@ -40,11 +40,11 @@ export const DUSK_PAPER: Palette = {
 	moon: [247, 224, 202, 255],
 	letters: [38, 30, 50],
 	birds: {
-		bats: [126, 115, 146, 255],
+		bats: [126, 115, 146, 153],
 		spirits: [70, 56, 90, 30],
 		hummingbirds: [160, 152, 216, 255],
 		cardinals: [222, 148, 166, 255],
-		budgerigars: [236, 188, 148, 255],
+		wrens: [192, 126, 82, 255],
 		doves: [255, 255, 255, 255]
 	},
 	butterflies: { hue: [285, 390], saturation: [30, 50], lightness: [62, 76] }

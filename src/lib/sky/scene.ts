@@ -7,7 +7,7 @@ export interface Look {
 	flapPeriod?: number;
 }
 
-export type Species = 'bats' | 'spirits' | 'hummingbirds' | 'cardinals' | 'budgerigars' | 'doves';
+export type Species = 'bats' | 'spirits' | 'hummingbirds' | 'cardinals' | 'wrens' | 'doves';
 
 export interface FlockSpec {
 	species: Species;
@@ -80,7 +80,7 @@ export const FLOCKS: FlockSpec[] = [
 		separationRadius: 18
 	},
 	{
-		species: 'budgerigars',
+		species: 'wrens',
 		look: { wingStart: 75, wingArc: 120, tail: [3.6, 26] },
 		flocks: [1, 2],
 		count: [11, 13],
