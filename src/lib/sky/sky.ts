@@ -26,7 +26,7 @@ const FLOW_WEIGHT = 1100;
 const FLOW_MARGIN = 26;
 /** Drawn last, over the wordmark and the links. */
 const TOPMOST: Species = 'doves';
-const PERCHERS: Species[] = ['hummingbirds', 'cardinals', 'budgerigars', 'doves'];
+const PERCHERS: Species[] = ['hummingbirds', 'cardinals', 'wrens', 'doves'];
 
 /** What a link's letters and the birds around it do while the link is hovered or focused. */
 export type LinkStyle = 'ruffle' | 'perch' | 'gather' | 'hop' | 'tighten' | 'flow';
@@ -653,7 +653,7 @@ export class Sky {
 			vx: rand(-1, 1) * 100,
 			vy: rand(-1, 1) * 100,
 			size: size * this.scale,
-			wingSize: (look.wingSize ?? size * 3) * this.scale,
+			wingSize: (look.wingSize ?? size * (look.wingReach ?? 3)) * this.scale,
 			wingStart: look.wingStart * DEG,
 			wingArc: look.wingArc * DEG,
 			tailSize: (look.tail?.[0] ?? 0) * size * this.scale,
