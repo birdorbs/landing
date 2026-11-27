@@ -10,8 +10,6 @@ export interface Palette {
 	moon: Rgba;
 	letters: Rgb;
 	birds: Record<Species, Rgba>;
-	/** A thin line around a species too close to the sky's own lightness to show without one. */
-	outlines?: Partial<Record<Species, Rgb>>;
 	butterflies: { hue: Range; saturation: Range; lightness: Range };
 }
 
@@ -47,8 +45,7 @@ export const DUSK_PAPER: Palette = {
 		hummingbirds: [160, 152, 216, 255],
 		cardinals: [222, 148, 166, 255],
 		wrens: [236, 188, 148, 255],
-		doves: [255, 246, 228, 255]
+		doves: [196, 176, 158, 255]
 	},
-	outlines: { doves: [176, 146, 112] },
 	butterflies: { hue: [285, 390], saturation: [30, 50], lightness: [62, 76] }
 };
