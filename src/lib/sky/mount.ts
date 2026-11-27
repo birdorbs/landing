@@ -74,6 +74,8 @@ export function mountSky(canvas: HTMLCanvasElement, word = 'birdorbs', links: Sk
 	const anchors: HTMLElement[] = links.map(({ text, href }, i) => {
 		const anchor = document.createElement('a');
 		anchor.href = href;
+		anchor.target = '_blank';
+		anchor.rel = 'noopener';
 		anchor.addEventListener('click', () => {
 			if (held === i) clearTimeout(linger);
 		});
