@@ -44,7 +44,7 @@ export interface Rect {
 export interface LinkSpec {
 	text: string;
 	mark?: string;
-	/** The corner a mark sits in; top right unless said. */
+	/** The corner a mark sits in; bottom right unless said. */
 	corner?: Corner;
 }
 
@@ -400,14 +400,14 @@ export class Sky {
 		const top = height - Math.max(60, height * 0.13) - (rows - 0.5) * cell;
 		let left = (width - (span - 1) * cell) / 2;
 
-		const radius = Math.max(16, Math.min(24, Math.min(width, height) * 0.035));
+		const radius = Math.max(14, Math.min(20, Math.min(width, height) * 0.03));
 		const margin = Math.max(20, Math.min(width, height) * 0.04);
 		const taken: Partial<Record<Corner, number>> = {};
 
 		let word = 0;
 		return this.linkSpecs.map((spec) => {
 			if (spec.mark) {
-				const corner = spec.corner ?? 'top-right';
+				const corner = spec.corner ?? 'bottom-right';
 				const inset = margin + radius + (taken[corner] ?? 0);
 				taken[corner] = (taken[corner] ?? 0) + radius * 2 + 16;
 				const home = {
