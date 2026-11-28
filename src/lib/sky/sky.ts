@@ -96,6 +96,8 @@ interface Boid {
 	fill: string;
 	alpha: number;
 	phase: boolean;
+	/** Flies on past the page's edges instead of turning back. */
+	wanders: boolean;
 	/** Where this bird falls in each of the palette's butterfly ranges. */
 	tint: [number, number, number];
 	/** Set while the bird is flying to, or sitting on, a hovered link or a heron's seat. */
@@ -707,6 +709,7 @@ export class Sky {
 			fill: '',
 			alpha: 1,
 			phase,
+			wanders: false,
 			tint: [Math.random(), Math.random(), Math.random()],
 			perch: null,
 			landed: false,
@@ -719,6 +722,7 @@ export class Sky {
 		const boids = Array.from({ length: count }, (_, i) =>
 			this.spawn(spec.look, Math.max(1, spec.size + randInt(-1, 1)), i < phasers)
 		);
+		for (const b of boids) b.wanders = spec.wanders ?? false;
 		return {
 			species: spec.species,
 			boids,
@@ -1003,6 +1007,7 @@ export class Sky {
 			b.y = ((b.y % this.height) + this.height) % this.height;
 			return;
 		}
+		if (b.wanders) return;
 		if (b.x < b.size) b.vx = Math.abs(b.vx);
 		else if (b.x > this.width - b.size) b.vx = -Math.abs(b.vx);
 		if (b.y < b.size) b.vy = Math.abs(b.vy);

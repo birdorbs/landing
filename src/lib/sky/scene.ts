@@ -23,6 +23,8 @@ export interface FlockSpec {
 	speed: [number, number];
 	size: number;
 	phaseRatio?: number;
+	/** The flock flies on past the page's edges instead of turning back. */
+	wanders?: boolean;
 	alignmentWeight?: number;
 	cohesionWeight?: number;
 	separationWeight?: number;
@@ -117,6 +119,7 @@ export const FLOCKS: FlockSpec[] = [
 		count: [2, 2],
 		speed: [95, 110],
 		size: 9,
+		wanders: true,
 		cohesionWeight: 20,
 		separationRadius: 70
 	}
