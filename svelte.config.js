@@ -6,7 +6,8 @@ const config = {
 	preprocess: vitePreprocess(),
 	kit: {
 		adapter: adapter(),
-		paths: { base: process.env.BASE_PATH ?? '' }
+		paths: { base: process.env.BASE_PATH ?? '' },
+		prerender: { origin: process.env.ORIGIN || 'http://localhost' }
 	}
 };
 
