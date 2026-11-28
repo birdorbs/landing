@@ -98,6 +98,8 @@ interface Boid {
 	tint: [number, number, number];
 	/** Set while the bird is flying to, or sitting on, a hovered link or a heron's seat. */
 	perch: Point | null;
+	/** Whether the bird has reached its perch. A heron short of its seat keeps choosing the nearest one, and shies from pointers. */
+	landed: boolean;
 }
 
 /** A heron and the dot it is flying to or sitting on; `timer` counts down its flight before it looks for one. */
@@ -306,6 +308,7 @@ export class Sky {
 			b.x = b.perch!.x;
 			b.y = b.perch!.y;
 			b.vx = b.vy = 0;
+			b.landed = true;
 		}
 	}
 
@@ -699,6 +702,7 @@ export class Sky {
 			phase,
 			tint: [Math.random(), Math.random(), Math.random()],
 			perch: null,
+			landed: false,
 		};
 	}
 
@@ -775,6 +779,7 @@ export class Sky {
 	}
 
 	private sit(heron: Heron, seat: Borb) {
+		if (heron.seat !== seat) heron.bird.landed = false;
 		heron.seat = seat;
 		heron.bird.perch = this.perchOn(seat, heron.bird);
 	}
@@ -782,6 +787,7 @@ export class Sky {
 	private takeOff(heron: Heron) {
 		const b = heron.bird;
 		heron.seat = null;
+		b.landed = false;
 		heron.timer = rand(...HERON_FLY);
 		b.perch = null;
 		b.vx = rand(-100, 100);
@@ -798,7 +804,9 @@ export class Sky {
 					this.takeOff(heron);
 					continue;
 				}
-				b.perch = this.perchOn(seat, b);
+				if (!b.landed) this.sit(heron, this.seatFor(heron) ?? seat);
+				b.perch = this.perchOn(heron.seat!, b);
+				b.landed ||= Math.hypot(b.perch.x - b.x, b.perch.y - b.y) < 1.5;
 				continue;
 			}
 			heron.timer -= dt;
@@ -859,8 +867,21 @@ export class Sky {
 				const glide = flock.species === 'herons';
 				const approach = glide ? Math.min(speed, dist * HERON_ARRIVE) : Math.min(speed * 1.8, dist * 5);
 				const blend = Math.min(1, (glide ? HERON_TURN : 6) * dt);
-				next[i * 2] = b.vx + ((dx / dist) * approach - b.vx) * blend;
-				next[i * 2 + 1] = b.vy + ((dy / dist) * approach - b.vy) * blend;
+				let tx = (dx / dist) * approach;
+				let ty = (dy / dist) * approach;
+				if (glide && !b.landed) {
+					for (const cursor of cursors) {
+						const ax = b.x - cursor.x;
+						const ay = b.y - cursor.y;
+						const away = Math.hypot(ax, ay);
+						if (away >= CURSOR_RADIUS || away === 0) continue;
+						const push = speed * 2 * (1 - away / CURSOR_RADIUS);
+						tx += (ax / away) * push;
+						ty += (ay / away) * push;
+					}
+				}
+				next[i * 2] = b.vx + (tx - b.vx) * blend;
+				next[i * 2 + 1] = b.vy + (ty - b.vy) * blend;
 				continue;
 			}
 			let sx: number;
