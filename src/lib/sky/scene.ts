@@ -7,9 +7,9 @@ export interface Look {
 	wingStart: number;
 	wingArc: number;
 	flapPeriod?: number;
-	/** A narrow wedge ahead of the body, its length in body radii past the body's edge. */
-	bill?: number;
-	/** Fold the tail and bill away with the wings once the bird sits, leaving only its body. */
+	/** A wedge ahead of the body, drawn like the tail: its length in body radii and its spread in degrees. */
+	bill?: [number, number];
+	/** Fade the wings, tail and bill with the bird's speed, leaving only its body once it sits. */
 	tucks?: boolean;
 }
 
@@ -114,7 +114,7 @@ export const FLOCKS: FlockSpec[] = [
 	},
 	{
 		species: 'herons',
-		look: { wingReach: 3, wingStart: 45, wingArc: 125, tail: [1.8, 50], bill: 1.5, tucks: true },
+		look: { wingReach: 3, wingStart: 45, wingArc: 125, tail: [1.8, 50], bill: [2.5, 18], tucks: true },
 		flocks: [1, 1],
 		count: [2, 2],
 		speed: [95, 110],

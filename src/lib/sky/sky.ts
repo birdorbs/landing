@@ -88,6 +88,7 @@ interface Boid {
 	tailSize: number;
 	tailSpread: number;
 	billSize: number;
+	billSpread: number;
 	/** Whether the wings, tail and bill fade with the bird's speed, leaving only its body once it sits. */
 	tucks: boolean;
 	/** How much of the wings, tail and bill a bird that `tucks` shows, easing toward what its speed calls for. */
@@ -704,7 +705,8 @@ export class Sky {
 			wingArc: look.wingArc * DEG,
 			tailSize: (look.tail?.[0] ?? 0) * size * this.scale,
 			tailSpread: (look.tail?.[1] ?? 0) * DEG,
-			billSize: (look.bill ?? 0) * size * this.scale,
+			billSize: (look.bill?.[0] ?? 0) * size * this.scale,
+			billSpread: (look.bill?.[1] ?? 0) * DEG,
 			tucks: look.tucks ?? false,
 			spread: 1,
 			flapPeriod: look.flapPeriod ?? -1,
@@ -1093,13 +1095,9 @@ export class Sky {
 		}
 		if (b.billSize) {
 			ctx.globalAlpha = b.alpha * tucked;
-			const ux = Math.cos(heading);
-			const uy = Math.sin(heading);
-			const base = b.size * 0.4;
 			ctx.beginPath();
-			ctx.moveTo(b.x + ux * (b.size + b.billSize), b.y + uy * (b.size + b.billSize));
-			ctx.lineTo(b.x - uy * base, b.y + ux * base);
-			ctx.lineTo(b.x + uy * base, b.y - ux * base);
+			ctx.moveTo(b.x, b.y);
+			ctx.arc(b.x, b.y, b.billSize, heading - b.billSpread / 2, heading + b.billSpread / 2);
 			ctx.fill();
 		}
 		ctx.globalAlpha = b.alpha;
