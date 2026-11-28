@@ -7,9 +7,13 @@ export interface Look {
 	wingStart: number;
 	wingArc: number;
 	flapPeriod?: number;
+	/** A narrow wedge ahead of the body, its length in body radii past the body's edge. */
+	bill?: number;
+	/** Fold the tail and bill away with the wings once the bird sits, leaving only its body. */
+	tucks?: boolean;
 }
 
-export type Species = 'bats' | 'spirits' | 'hummingbirds' | 'cardinals' | 'wrens' | 'doves';
+export type Species = 'bats' | 'spirits' | 'hummingbirds' | 'cardinals' | 'wrens' | 'doves' | 'herons';
 
 export interface FlockSpec {
 	species: Species;
@@ -105,5 +109,15 @@ export const FLOCKS: FlockSpec[] = [
 		separationWeight: 115,
 		cohesionRadius: Infinity,
 		separationRadius: 30
+	},
+	{
+		species: 'herons',
+		look: { wingReach: 3, wingStart: 45, wingArc: 125, tail: [1.8, 50], bill: 1.5, tucks: true },
+		flocks: [1, 1],
+		count: [2, 2],
+		speed: [95, 110],
+		size: 9,
+		cohesionWeight: 20,
+		separationRadius: 70
 	}
 ];

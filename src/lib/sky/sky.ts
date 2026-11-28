@@ -25,8 +25,12 @@ const GATHER_WEIGHT = 900;
 const FLOW_WEIGHT = 1100;
 const FLOW_MARGIN = 26;
 /** Drawn last, over the wordmark and the links. */
-const TOPMOST: Species = 'doves';
+const TOPMOST: Species[] = ['doves', 'herons'];
 const PERCHERS: Species[] = ['hummingbirds', 'cardinals', 'wrens', 'doves'];
+/** Herons fly this many seconds after leaving a word before they land again. */
+const HERON_FLY: [number, number] = [4, 8];
+/** Two herons never sit on the same word closer than this many dot columns apart. */
+const HERON_SPACING = 4;
 
 /** What a link's letters and the birds around it do while the link is hovered or focused. */
 export type LinkStyle = 'ruffle' | 'perch' | 'gather' | 'hop' | 'tighten' | 'flow';
@@ -79,6 +83,9 @@ interface Boid {
 	wingArc: number;
 	tailSize: number;
 	tailSpread: number;
+	billSize: number;
+	/** Whether the tail and bill fold away with the wings once the bird sits, leaving only its body. */
+	tucks: boolean;
 	flapPeriod: number;
 	flap: number;
 	fill: string;
@@ -86,8 +93,15 @@ interface Boid {
 	phase: boolean;
 	/** Where this bird falls in each of the palette's butterfly ranges. */
 	tint: [number, number, number];
-	/** Set while the bird is flying to, or sitting on, a hovered link. */
+	/** Set while the bird is flying to, or sitting on, a hovered link or a heron's seat. */
 	perch: Point | null;
+}
+
+/** A heron and the dot it is flying to or sitting on; `timer` counts down its flight before it looks for one. */
+interface Heron {
+	bird: Boid;
+	seat: Borb | null;
+	timer: number;
 }
 
 interface Flock {
@@ -156,6 +170,7 @@ export class Sky {
 	private moon = { x: 0, y: 0, vx: 0, vy: 0, size: 0, halo: rand(0.3, 0.6) };
 	private butterflies: Boid[] = [];
 	private flocks: Flock[] = [];
+	private herons: Heron[] = [];
 	private borbs: Borb[] = [];
 	private links: Link[] = [];
 	private marks: Path2D[] = [];
@@ -280,12 +295,22 @@ export class Sky {
 			b.y = b.hy;
 			b.vx = b.vy = b.roam = b.flight = 0;
 		}
+		for (const heron of this.herons) {
+			const seat = this.seatFor(heron);
+			if (!seat) continue;
+			this.sit(heron, seat);
+			const b = heron.bird;
+			b.x = b.perch!.x;
+			b.y = b.perch!.y;
+			b.vx = b.vy = 0;
+		}
 	}
 
 	step(dt: number) {
 		this.time += dt;
 		this.stepMoon(dt);
 		for (const b of this.butterflies) this.stepButterfly(b, dt);
+		this.stepHerons(dt);
 		for (const flock of this.flocks) this.steer(flock, dt);
 		for (const flock of this.flocks) for (const b of flock.boids) this.move(b, dt);
 		for (const link of this.links) {
@@ -314,7 +339,7 @@ export class Sky {
 
 		for (const b of this.butterflies) this.drawBoid(ctx, b, dt);
 		for (const flock of this.flocks) {
-			if (flock.species !== TOPMOST) for (const b of flock.boids) this.drawBoid(ctx, b, dt);
+			if (!TOPMOST.includes(flock.species)) for (const b of flock.boids) this.drawBoid(ctx, b, dt);
 		}
 
 		ctx.fillStyle = rgb(this.palette.letters);
@@ -347,7 +372,7 @@ export class Sky {
 			this.drawBorbs(ctx, link.borbs, radius, alpha, dt, grow);
 		}
 		for (const flock of this.flocks) {
-			if (flock.species === TOPMOST) for (const b of flock.boids) this.drawBoid(ctx, b, dt);
+			if (TOPMOST.includes(flock.species)) for (const b of flock.boids) this.drawBoid(ctx, b, dt);
 		}
 		ctx.globalAlpha = 1;
 	}
@@ -643,6 +668,10 @@ export class Sky {
 			const flocks = spec.flocks[1] === 1 ? 1 : scaled(randInt(...spec.flocks));
 			for (let i = 0; i < flocks; i++) this.flocks.push(this.spawnFlock(spec));
 		}
+		for (const flock of this.flocks) {
+			if (flock.species !== 'herons') continue;
+			for (const bird of flock.boids) this.herons.push({ bird, seat: null, timer: rand(2.5, 5) });
+		}
 		this.paint(this.palette);
 	}
 
@@ -658,13 +687,15 @@ export class Sky {
 			wingArc: look.wingArc * DEG,
 			tailSize: (look.tail?.[0] ?? 0) * size * this.scale,
 			tailSpread: (look.tail?.[1] ?? 0) * DEG,
+			billSize: (look.bill ?? 0) * size * this.scale,
+			tucks: look.tucks ?? false,
 			flapPeriod: look.flapPeriod ?? -1,
 			flap: rand(0, 10),
 			fill: '',
 			alpha: 1,
 			phase,
 			tint: [Math.random(), Math.random(), Math.random()],
-			perch: null
+			perch: null,
 		};
 	}
 
@@ -686,6 +717,90 @@ export class Sky {
 			separationWeight: spec.separationWeight ?? 80,
 			currentVelocityWeight: spec.currentVelocityWeight ?? 100
 		};
+	}
+
+	/** The topmost dot of each column of the wordmark and of each word link, where a heron may sit. */
+	private get seats(): Borb[] {
+		const tops = new Map<string, Borb>();
+		const words = [this.borbs, ...this.links.filter((link) => !link.radius).map((link) => link.borbs)];
+		words.forEach((borbs, word) => {
+			for (const b of borbs) {
+				const key = `${word}:${b.hx}`;
+				const top = tops.get(key);
+				if (!top || b.hy < top.hy) tops.set(key, b);
+			}
+		});
+		return [...tops.values()];
+	}
+
+	private cellOf(seat: Borb): number {
+		return seat.link?.cell ?? this.cell;
+	}
+
+	/** A link is touched while hovered or focused, and the wordmark while a pointer is over it. */
+	private touched(seat: Borb): boolean {
+		if (seat.link) return seat.link.hovered;
+		const xs = this.borbs.map((b) => b.hx);
+		const ys = this.borbs.map((b) => b.hy);
+		const pad = this.cell;
+		return [...this.pointers.values()].some(
+			(p) =>
+				p.x >= Math.min(...xs) - pad &&
+				p.x <= Math.max(...xs) + pad &&
+				p.y >= Math.min(...ys) - pad &&
+				p.y <= Math.max(...ys) + pad
+		);
+	}
+
+	/** A free seat whose dot is home on an untouched word, well clear of any heron already on that word. */
+	private seatFor(heron: Heron): Borb | null {
+		const taken = this.herons.filter((h) => h !== heron && h.seat).map((h) => h.seat!);
+		const free = this.seats.filter(
+			(s) =>
+				s.roam <= 0 &&
+				Math.hypot(s.x - s.hx, s.y - s.hy) < this.cellOf(s) &&
+				!this.touched(s) &&
+				taken.every((t) => t.link !== s.link || Math.abs(t.hx - s.hx) >= HERON_SPACING * this.cellOf(s))
+		);
+		return free.length ? free[randInt(0, free.length - 1)] : null;
+	}
+
+	private perchOn(seat: Borb, b: Boid): Point {
+		return { x: seat.x, y: seat.y - this.cellOf(seat) * 0.42 - b.size };
+	}
+
+	private sit(heron: Heron, seat: Borb) {
+		heron.seat = seat;
+		heron.bird.perch = this.perchOn(seat, heron.bird);
+	}
+
+	private takeOff(heron: Heron) {
+		const b = heron.bird;
+		heron.seat = null;
+		heron.timer = rand(...HERON_FLY);
+		b.perch = null;
+		b.vx = rand(-100, 100);
+		b.vy = -180;
+	}
+
+	/** Herons fly a while, then sit on a word until it is touched. */
+	private stepHerons(dt: number) {
+		for (const heron of this.herons) {
+			const b = heron.bird;
+			const seat = heron.seat;
+			if (seat) {
+				if (this.touched(seat)) {
+					this.takeOff(heron);
+					continue;
+				}
+				b.perch = this.perchOn(seat, b);
+				continue;
+			}
+			heron.timer -= dt;
+			if (heron.timer > 0) continue;
+			const next = this.seatFor(heron);
+			if (next) this.sit(heron, next);
+		}
 	}
 
 	private stepMoon(dt: number) {
@@ -916,12 +1031,24 @@ export class Sky {
 		ctx.globalAlpha = beat * b.alpha * folded;
 		const heading = Math.atan2(b.vy, b.vx);
 		wings(ctx, b.x, b.y, b.wingSize, heading, b.wingStart, b.wingArc);
+		const tucked = b.tucks ? folded : 1;
 		if (b.tailSize) {
-			ctx.globalAlpha = b.alpha * (1 - TAIL_FADE * (1 - beat / FLAP_PEAK));
+			ctx.globalAlpha = b.alpha * (1 - TAIL_FADE * (1 - beat / FLAP_PEAK)) * tucked;
 			const back = heading + Math.PI;
 			ctx.beginPath();
 			ctx.moveTo(b.x, b.y);
 			ctx.arc(b.x, b.y, b.tailSize, back - b.tailSpread / 2, back + b.tailSpread / 2);
+			ctx.fill();
+		}
+		if (b.billSize) {
+			ctx.globalAlpha = b.alpha * tucked;
+			const ux = Math.cos(heading);
+			const uy = Math.sin(heading);
+			const base = b.size * 0.4;
+			ctx.beginPath();
+			ctx.moveTo(b.x + ux * (b.size + b.billSize), b.y + uy * (b.size + b.billSize));
+			ctx.lineTo(b.x - uy * base, b.y + ux * base);
+			ctx.lineTo(b.x + uy * base, b.y - ux * base);
 			ctx.fill();
 		}
 		ctx.globalAlpha = b.alpha;
