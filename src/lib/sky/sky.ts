@@ -87,8 +87,10 @@ interface Boid {
 	tailSize: number;
 	tailSpread: number;
 	billSize: number;
-	/** Whether the tail and bill fold away with the wings once the bird sits, leaving only its body. */
+	/** Whether the wings, tail and bill fade with the bird's speed, leaving only its body once it sits. */
 	tucks: boolean;
+	/** How much of the wings, tail and bill a bird that `tucks` shows, easing toward what its speed calls for. */
+	spread: number;
 	flapPeriod: number;
 	flap: number;
 	fill: string;
@@ -146,6 +148,9 @@ const WING_ARC = 130 * DEG;
 /** How far, in radians, a hovered link dot's wings jitter about its facing. */
 const BUZZ = 0.16;
 const FLAP_PEAK = 0.9;
+/** A bird that tucks shows its wings, tail and bill in full at this speed and above, and eases toward that at this rate a second. */
+const TUCK_SPEED = 70;
+const TUCK_RATE = 4;
 /** How far a tail fades over a wingbeat, as a share of how far the wings do. */
 const TAIL_FADE = 0.5;
 
@@ -309,6 +314,7 @@ export class Sky {
 			b.y = b.perch!.y;
 			b.vx = b.vy = 0;
 			b.landed = true;
+			b.spread = 0;
 		}
 	}
 
@@ -695,6 +701,7 @@ export class Sky {
 			tailSpread: (look.tail?.[1] ?? 0) * DEG,
 			billSize: (look.bill ?? 0) * size * this.scale,
 			tucks: look.tucks ?? false,
+			spread: 1,
 			flapPeriod: look.flapPeriod ?? -1,
 			flap: rand(0, 10),
 			fill: '',
@@ -1059,12 +1066,14 @@ export class Sky {
 		b.flap += dt / period;
 
 		ctx.fillStyle = b.fill;
-		const folded = b.perch ? Math.min(1, Math.hypot(b.vx, b.vy) / 60) : 1;
+		const speed = Math.hypot(b.vx, b.vy);
+		if (b.tucks) b.spread += (Math.min(1, speed / TUCK_SPEED) - b.spread) * Math.min(1, TUCK_RATE * dt);
+		const tucked = b.tucks ? b.spread : 1;
+		const folded = b.tucks ? tucked : b.perch ? Math.min(1, speed / 60) : 1;
 		const beat = flapAlpha(b.flap);
 		ctx.globalAlpha = beat * b.alpha * folded;
 		const heading = Math.atan2(b.vy, b.vx);
 		wings(ctx, b.x, b.y, b.wingSize, heading, b.wingStart, b.wingArc);
-		const tucked = b.tucks ? folded : 1;
 		if (b.tailSize) {
 			ctx.globalAlpha = b.alpha * (1 - TAIL_FADE * (1 - beat / FLAP_PEAK)) * tucked;
 			const back = heading + Math.PI;
