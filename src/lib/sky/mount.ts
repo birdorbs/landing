@@ -50,7 +50,7 @@ export function mountSky(canvas: HTMLCanvasElement, word = 'birdorbs', links: Sk
 	const palette = () => (theme() === 'light' ? DUSK_PAPER : TWILIGHT);
 	const sky = new Sky(word, palette(), [
 		...links.map(({ text, mark }) => ({ text, mark })),
-		{ text: 'theme', mark: CONTRAST_MARK, corner: 'top-left' }
+		{ text: 'theme', mark: CONTRAST_MARK, corner: 'bottom-left' }
 	]);
 	let pointed = -1;
 	let focused = -1;
