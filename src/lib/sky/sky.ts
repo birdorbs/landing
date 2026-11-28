@@ -27,12 +27,9 @@ const FLOW_MARGIN = 26;
 /** Drawn last, over the wordmark and the links. */
 const TOPMOST: Species[] = ['doves', 'herons'];
 const PERCHERS: Species[] = ['hummingbirds', 'cardinals', 'wrens', 'doves'];
-/** Herons sit on the tops of the wordmark's letters for this many seconds, and fly between sittings for this many. */
-const HERON_SIT: [number, number] = [10, 20];
+/** Herons fly this many seconds after leaving a word before they land again. */
 const HERON_FLY: [number, number] = [4, 8];
-/** A sitting heron faces along the word, tipped up by this much so its tail hangs behind it. */
-const HERON_TILT = 30 * DEG;
-/** Two herons never sit closer than this many dot columns apart. */
+/** Two herons never sit on the same word closer than this many dot columns apart. */
 const HERON_SPACING = 4;
 
 /** What a link's letters and the birds around it do while the link is hovered or focused. */
@@ -87,6 +84,8 @@ interface Boid {
 	tailSize: number;
 	tailSpread: number;
 	billSize: number;
+	/** Whether the tail and bill fold away with the wings once the bird sits, leaving only its body. */
+	tucks: boolean;
 	flapPeriod: number;
 	flap: number;
 	fill: string;
@@ -96,12 +95,9 @@ interface Boid {
 	tint: [number, number, number];
 	/** Set while the bird is flying to, or sitting on, a hovered link or a heron's seat. */
 	perch: Point | null;
-	/** The way the bird faces: along its flight, or turning to `pose` once it sits. */
-	facing: number;
-	pose: number | null;
 }
 
-/** A heron and the wordmark dot it is flying to or sitting on; `timer` counts down its sitting, or its flight before the next. */
+/** A heron and the dot it is flying to or sitting on; `timer` counts down its flight before it looks for one. */
 interface Heron {
 	bird: Boid;
 	seat: Borb | null;
@@ -302,12 +298,11 @@ export class Sky {
 		for (const heron of this.herons) {
 			const seat = this.seatFor(heron);
 			if (!seat) continue;
-			this.sit(heron, seat, rand(...HERON_SIT));
+			this.sit(heron, seat);
 			const b = heron.bird;
 			b.x = b.perch!.x;
 			b.y = b.perch!.y;
 			b.vx = b.vy = 0;
-			b.facing = b.pose = this.poseOn(seat);
 		}
 	}
 
@@ -693,6 +688,7 @@ export class Sky {
 			tailSize: (look.tail?.[0] ?? 0) * size * this.scale,
 			tailSpread: (look.tail?.[1] ?? 0) * DEG,
 			billSize: (look.bill ?? 0) * size * this.scale,
+			tucks: look.tucks ?? false,
 			flapPeriod: look.flapPeriod ?? -1,
 			flap: rand(0, 10),
 			fill: '',
@@ -700,8 +696,6 @@ export class Sky {
 			phase,
 			tint: [Math.random(), Math.random(), Math.random()],
 			perch: null,
-			facing: 0,
-			pose: null
 		};
 	}
 
@@ -725,77 +719,87 @@ export class Sky {
 		};
 	}
 
-	/** The topmost dot of each of the wordmark's columns, where a heron may sit. */
+	/** The topmost dot of each column of the wordmark and of each word link, where a heron may sit. */
 	private get seats(): Borb[] {
-		const tops = new Map<number, Borb>();
-		for (const b of this.borbs) {
-			const top = tops.get(b.hx);
-			if (!top || b.hy < top.hy) tops.set(b.hx, b);
-		}
+		const tops = new Map<string, Borb>();
+		const words = [this.borbs, ...this.links.filter((link) => !link.radius).map((link) => link.borbs)];
+		words.forEach((borbs, word) => {
+			for (const b of borbs) {
+				const key = `${word}:${b.hx}`;
+				const top = tops.get(key);
+				if (!top || b.hy < top.hy) tops.set(key, b);
+			}
+		});
 		return [...tops.values()];
 	}
 
-	/** A free seat whose dot is home, well clear of every other heron's. */
+	private cellOf(seat: Borb): number {
+		return seat.link?.cell ?? this.cell;
+	}
+
+	/** A link is touched while hovered or focused, and the wordmark while a pointer is over it. */
+	private touched(seat: Borb): boolean {
+		if (seat.link) return seat.link.hovered;
+		const xs = this.borbs.map((b) => b.hx);
+		const ys = this.borbs.map((b) => b.hy);
+		const pad = this.cell;
+		return [...this.pointers.values()].some(
+			(p) =>
+				p.x >= Math.min(...xs) - pad &&
+				p.x <= Math.max(...xs) + pad &&
+				p.y >= Math.min(...ys) - pad &&
+				p.y <= Math.max(...ys) + pad
+		);
+	}
+
+	/** A free seat whose dot is home on an untouched word, well clear of any heron already on that word. */
 	private seatFor(heron: Heron): Borb | null {
-		const taken = this.herons.filter((h) => h !== heron && h.seat).map((h) => h.seat!.hx);
+		const taken = this.herons.filter((h) => h !== heron && h.seat).map((h) => h.seat!);
 		const free = this.seats.filter(
 			(s) =>
 				s.roam <= 0 &&
-				Math.hypot(s.x - s.hx, s.y - s.hy) < this.cell &&
-				taken.every((x) => Math.abs(x - s.hx) >= HERON_SPACING * this.cell)
+				Math.hypot(s.x - s.hx, s.y - s.hy) < this.cellOf(s) &&
+				!this.touched(s) &&
+				taken.every((t) => t.link !== s.link || Math.abs(t.hx - s.hx) >= HERON_SPACING * this.cellOf(s))
 		);
 		return free.length ? free[randInt(0, free.length - 1)] : null;
 	}
 
 	private perchOn(seat: Borb, b: Boid): Point {
-		return { x: seat.x, y: seat.y - this.cell * 0.42 - b.size };
+		return { x: seat.x, y: seat.y - this.cellOf(seat) * 0.42 - b.size };
 	}
 
-	/** A sitting heron faces the way it came in, or into the word from either end. */
-	private poseOn(seat: Borb, from?: number): number {
-		const middle = this.width / 2;
-		const right = from === undefined ? seat.hx < middle : seat.hx > from;
-		return right ? -HERON_TILT : Math.PI + HERON_TILT;
-	}
-
-	private sit(heron: Heron, seat: Borb, time: number) {
+	private sit(heron: Heron, seat: Borb) {
 		heron.seat = seat;
-		heron.timer = time;
 		heron.bird.perch = this.perchOn(seat, heron.bird);
 	}
 
-	private takeOff(heron: Heron, vigor: number) {
+	private takeOff(heron: Heron) {
 		const b = heron.bird;
 		heron.seat = null;
 		heron.timer = rand(...HERON_FLY);
 		b.perch = null;
-		b.pose = null;
-		b.vx = Math.cos(b.facing) * 60 * vigor + rand(-40, 40);
-		b.vy = -110 * vigor;
+		b.vx = rand(-100, 100);
+		b.vy = -180;
 	}
 
-	/** Herons fly a while, then sit on a letter until their time is up or a pointer comes near. */
+	/** Herons fly a while, then sit on a word until it is touched. */
 	private stepHerons(dt: number) {
-		const pointers = [...this.birdPointers];
 		for (const heron of this.herons) {
 			const b = heron.bird;
-			const startled = pointers.some((p) => Math.hypot(p.x - b.x, p.y - b.y) < CURSOR_RADIUS);
-			heron.timer -= dt;
 			const seat = heron.seat;
 			if (seat) {
-				if (startled || heron.timer <= 0) {
-					this.takeOff(heron, startled ? 1.6 : 1);
+				if (this.touched(seat)) {
+					this.takeOff(heron);
 					continue;
 				}
 				b.perch = this.perchOn(seat, b);
-				if (b.pose === null && Math.hypot(b.perch.x - b.x, b.perch.y - b.y) < this.cell * 0.5) {
-					b.pose = this.poseOn(seat, b.x - b.vx);
-				}
 				continue;
 			}
-			if (heron.timer > 0 || startled) continue;
+			heron.timer -= dt;
+			if (heron.timer > 0) continue;
 			const next = this.seatFor(heron);
-			if (next) this.sit(heron, next, rand(...HERON_SIT));
+			if (next) this.sit(heron, next);
 		}
 	}
 
@@ -1025,20 +1029,19 @@ export class Sky {
 		const folded = b.perch ? Math.min(1, Math.hypot(b.vx, b.vy) / 60) : 1;
 		const beat = flapAlpha(b.flap);
 		ctx.globalAlpha = beat * b.alpha * folded;
-		if (b.pose === null) b.facing = Math.atan2(b.vy, b.vx);
-		else b.facing += (((b.pose - b.facing + Math.PI * 3) % TAU) - Math.PI) * Math.min(1, 8 * dt);
-		const heading = b.facing;
+		const heading = Math.atan2(b.vy, b.vx);
 		wings(ctx, b.x, b.y, b.wingSize, heading, b.wingStart, b.wingArc);
+		const tucked = b.tucks ? folded : 1;
 		if (b.tailSize) {
-			ctx.globalAlpha = b.alpha * (1 - TAIL_FADE * (1 - beat / FLAP_PEAK));
+			ctx.globalAlpha = b.alpha * (1 - TAIL_FADE * (1 - beat / FLAP_PEAK)) * tucked;
 			const back = heading + Math.PI;
 			ctx.beginPath();
 			ctx.moveTo(b.x, b.y);
 			ctx.arc(b.x, b.y, b.tailSize, back - b.tailSpread / 2, back + b.tailSpread / 2);
 			ctx.fill();
 		}
-		ctx.globalAlpha = b.alpha;
 		if (b.billSize) {
+			ctx.globalAlpha = b.alpha * tucked;
 			const ux = Math.cos(heading);
 			const uy = Math.sin(heading);
 			const base = b.size * 0.4;
@@ -1048,6 +1051,7 @@ export class Sky {
 			ctx.lineTo(b.x + uy * base, b.y - ux * base);
 			ctx.fill();
 		}
+		ctx.globalAlpha = b.alpha;
 		ctx.beginPath();
 		ctx.arc(b.x, b.y, b.size, 0, TAU);
 		ctx.fill();
