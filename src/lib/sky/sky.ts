@@ -29,6 +29,7 @@ const TOPMOST: Species[] = ['doves', 'herons'];
 const PERCHERS: Species[] = ['hummingbirds', 'cardinals', 'wrens', 'doves'];
 /** Herons fly this many seconds after leaving a word before they land again. */
 const HERON_FLY: [number, number] = [7, 11];
+const HERON_LAUNCH = 200;
 /** A landing heron turns toward its seat at this rate a second, and near it flies at this many times its distance a second. */
 const HERON_TURN = 3;
 const HERON_ARRIVE = 1.2;
@@ -183,6 +184,8 @@ export class Sky {
 	private butterflies: Boid[] = [];
 	private flocks: Flock[] = [];
 	private herons: Heron[] = [];
+	/** The way herons launch: chosen afresh when one takes off with none in the air, and followed by any that take off before it lands. */
+	private launch = rand(0, TAU);
 	private borbs: Borb[] = [];
 	private links: Link[] = [];
 	private marks: Path2D[] = [];
@@ -797,12 +800,13 @@ export class Sky {
 
 	private takeOff(heron: Heron) {
 		const b = heron.bird;
+		if (this.herons.every((h) => h.bird.landed)) this.launch = rand(0, TAU);
 		heron.seat = null;
 		b.landed = false;
 		heron.timer = rand(...HERON_FLY);
 		b.perch = null;
-		b.vx = rand(-100, 100);
-		b.vy = -180;
+		b.vx = Math.cos(this.launch) * HERON_LAUNCH;
+		b.vy = Math.sin(this.launch) * HERON_LAUNCH;
 	}
 
 	/** Herons fly a while, then sit on a word until it is touched. One still in the air joins the birds gathering at a hovered link. */
