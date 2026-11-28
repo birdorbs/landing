@@ -29,6 +29,9 @@ const TOPMOST: Species[] = ['doves', 'herons'];
 const PERCHERS: Species[] = ['hummingbirds', 'cardinals', 'wrens', 'doves'];
 /** Herons fly this many seconds after leaving a word before they land again. */
 const HERON_FLY: [number, number] = [4, 8];
+/** A landing heron turns toward its seat at this rate a second, and near it flies at this many times its distance a second. */
+const HERON_TURN = 3;
+const HERON_ARRIVE = 1.2;
 /** Two herons never sit on the same word closer than this many dot columns apart. */
 const HERON_SPACING = 4;
 
@@ -752,7 +755,7 @@ export class Sky {
 		);
 	}
 
-	/** A free seat whose dot is home on an untouched word, well clear of any heron already on that word. */
+	/** The nearest free seat whose dot is home on an untouched word, well clear of any heron already on that word. */
 	private seatFor(heron: Heron): Borb | null {
 		const taken = this.herons.filter((h) => h !== heron && h.seat).map((h) => h.seat!);
 		const free = this.seats.filter(
@@ -762,7 +765,9 @@ export class Sky {
 				!this.touched(s) &&
 				taken.every((t) => t.link !== s.link || Math.abs(t.hx - s.hx) >= HERON_SPACING * this.cellOf(s))
 		);
-		return free.length ? free[randInt(0, free.length - 1)] : null;
+		const { x, y } = heron.bird;
+		const distance = (s: Borb) => Math.hypot(s.hx - x, s.hy - y);
+		return free.reduce<Borb | null>((best, s) => (!best || distance(s) < distance(best) ? s : best), null);
 	}
 
 	private perchOn(seat: Borb, b: Boid): Point {
@@ -851,8 +856,9 @@ export class Sky {
 				const dx = b.perch.x - b.x;
 				const dy = b.perch.y - b.y;
 				const dist = Math.hypot(dx, dy) || 1;
-				const approach = Math.min(speed * 1.8, dist * 5);
-				const blend = Math.min(1, 6 * dt);
+				const glide = flock.species === 'herons';
+				const approach = glide ? Math.min(speed, dist * HERON_ARRIVE) : Math.min(speed * 1.8, dist * 5);
+				const blend = Math.min(1, (glide ? HERON_TURN : 6) * dt);
 				next[i * 2] = b.vx + ((dx / dist) * approach - b.vx) * blend;
 				next[i * 2 + 1] = b.vy + ((dy / dist) * approach - b.vy) * blend;
 				continue;
