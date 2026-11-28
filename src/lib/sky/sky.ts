@@ -44,7 +44,7 @@ export interface Rect {
 export interface LinkSpec {
 	text: string;
 	mark?: string;
-	/** The corner a mark sits in; bottom right unless said. */
+	/** The corner a mark sits in; top right unless said. */
 	corner?: Corner;
 }
 
@@ -407,7 +407,7 @@ export class Sky {
 		let word = 0;
 		return this.linkSpecs.map((spec) => {
 			if (spec.mark) {
-				const corner = spec.corner ?? 'bottom-right';
+				const corner = spec.corner ?? 'top-right';
 				const inset = margin + radius + (taken[corner] ?? 0);
 				taken[corner] = (taken[corner] ?? 0) + radius * 2 + 16;
 				const home = {
