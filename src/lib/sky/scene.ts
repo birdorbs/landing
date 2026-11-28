@@ -114,7 +114,7 @@ export const FLOCKS: FlockSpec[] = [
 	},
 	{
 		species: 'herons',
-		look: { wingReach: 3, wingStart: 45, wingArc: 125, tail: [1.8, 50], bill: [2.5, 18], tucks: true },
+		look: { wingReach: 3, wingStart: 45, wingArc: 125, tail: [1.8, 50], bill: [2.5, 10], tucks: true },
 		flocks: [1, 1],
 		count: [2, 2],
 		speed: [95, 110],
