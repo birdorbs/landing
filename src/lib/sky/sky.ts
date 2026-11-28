@@ -28,7 +28,7 @@ const FLOW_MARGIN = 26;
 const TOPMOST: Species[] = ['doves', 'herons'];
 const PERCHERS: Species[] = ['hummingbirds', 'cardinals', 'wrens', 'doves'];
 /** Herons fly this many seconds after leaving a word before they land again. */
-const HERON_FLY: [number, number] = [4, 8];
+const HERON_FLY: [number, number] = [7, 11];
 /** A landing heron turns toward its seat at this rate a second, and near it flies at this many times its distance a second. */
 const HERON_TURN = 3;
 const HERON_ARRIVE = 1.2;
