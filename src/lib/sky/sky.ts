@@ -794,8 +794,9 @@ export class Sky {
 		b.vy = -180;
 	}
 
-	/** Herons fly a while, then sit on a word until it is touched. */
+	/** Herons fly a while, then sit on a word until it is touched. One still in the air joins the birds gathering at a hovered link. */
 	private stepHerons(dt: number) {
+		const gathering = (this.linkStyle === 'gather' || this.linkStyle === 'flow') && this.hovering;
 		for (const heron of this.herons) {
 			const b = heron.bird;
 			const seat = heron.seat;
@@ -804,13 +805,18 @@ export class Sky {
 					this.takeOff(heron);
 					continue;
 				}
+				if (gathering && !b.landed) {
+					heron.seat = b.perch = null;
+					heron.timer = 0;
+					continue;
+				}
 				if (!b.landed) this.sit(heron, this.seatFor(heron) ?? seat);
 				b.perch = this.perchOn(heron.seat!, b);
 				b.landed ||= Math.hypot(b.perch.x - b.x, b.perch.y - b.y) < 1.5;
 				continue;
 			}
 			heron.timer -= dt;
-			if (heron.timer > 0) continue;
+			if (heron.timer > 0 || gathering) continue;
 			const next = this.seatFor(heron);
 			if (next) this.sit(heron, next);
 		}
