@@ -9,6 +9,10 @@ const THEME_KEY = 'theme';
 const TOUCH_LINGER = 450;
 /** A touch that travels further than this is no tap to the browser, which then sends no click. */
 const TAP_SLOP = 8;
+/** A touch held longer than this may be a long press to the browser, which then sends no click either. */
+const TAP_HOLD = 350;
+/** How long an opened link stays lit when its page never takes the screen, as when the new tab is blocked. */
+const OPEN_LINGER = 1500;
 /** How long the browser's own click is ignored after one is sent for it. */
 const CLICK_MUTE = 700;
 
@@ -31,9 +35,9 @@ export interface SkyLink extends Omit<LinkSpec, 'corner'> {
  * Runs the sky on `canvas` until the returned function is called. Each link is drawn in the sky with a real
  * anchor laid over it in the canvas's parent, and so is a button that switches between light and dark. A touch
  * has no hover, so a tapped link stays lit for a moment after the finger lifts, and one that is opening its page
- * stays lit until the page is hidden. A finger that moves on a link and lifts inside it still opens it, as a
- * mouse would. The birds make way for every finger on the page. The
- * palette follows the system color scheme until that button is pressed; the choice is kept in `localStorage`
+ * stays lit until the page is hidden. A finger lights only the link it went down on. One that moves or rests on
+ * a link and lifts inside it still opens it, as a mouse would. The birds make way for every finger on the page.
+ * The palette follows the system color scheme until that button is pressed; the choice is kept in `localStorage`
  * and mirrored to `data-theme` on the root element.
  */
 export function mountSky(canvas: HTMLCanvasElement, word = 'birdorbs', links: SkyLink[] = []): () => void {
@@ -82,7 +86,9 @@ export function mountSky(canvas: HTMLCanvasElement, word = 'birdorbs', links: Sk
 		anchor.target = '_blank';
 		anchor.rel = 'noopener';
 		anchor.addEventListener('click', () => {
-			if (held === i) clearTimeout(linger);
+			if (held !== i) return;
+			clearTimeout(linger);
+			linger = window.setTimeout(letGo, OPEN_LINGER);
 		});
 		return overlay(anchor, text, i);
 	});
@@ -147,12 +153,12 @@ export function mountSky(canvas: HTMLCanvasElement, word = 'birdorbs', links: Sk
 		return { x: e.clientX - rect.left, y: e.clientY - rect.top };
 	};
 	/** A touch stays captured by the element it began on, so the link under the pointer is found by position. */
-	const point = (cursor: { x: number; y: number } | null) => {
-		const over = cursor
-			? sky.linkRects.findIndex(
-					(r) => cursor.x >= r.x && cursor.x <= r.x + r.w && cursor.y >= r.y && cursor.y <= r.y + r.h
-				)
-			: -1;
+	const linkAt = (at: { x: number; y: number }) =>
+		sky.linkRects.findIndex((r) => at.x >= r.x && at.x <= r.x + r.w && at.y >= r.y && at.y <= r.y + r.h);
+	/** Given `only`, the pointer lights no other link. */
+	const point = (cursor: { x: number; y: number } | null, only?: number) => {
+		let over = cursor ? linkAt(cursor) : -1;
+		if (only !== undefined && over !== only) over = -1;
 		if (cursor && held >= 0) {
 			clearTimeout(linger);
 			if (over === held) pointed = held;
@@ -164,18 +170,22 @@ export function mountSky(canvas: HTMLCanvasElement, word = 'birdorbs', links: Sk
 		if (over >= 0) sky.hover(over, true, cursor!);
 		pointed = over;
 	};
-	let press: { link: number; x: number; y: number; moved: boolean } | null = null;
+	let press: { link: number; x: number; y: number; at: number; moved: boolean } | null = null;
 	let muted = 0;
 	const onMove = (e: PointerEvent) => {
 		const at = local(e);
 		sky.touch(e.pointerId, at.x, at.y);
 		if (!e.isPrimary) return;
-		point(at);
+		point(at, e.pointerType !== 'mouse' && e.buttons ? (press?.link ?? -1) : undefined);
 		if (press && Math.hypot(at.x - press.x, at.y - press.y) > TAP_SLOP) press.moved = true;
 	};
 	const onDown = (e: PointerEvent) => {
+		if (e.isPrimary) {
+			const at = local(e);
+			const link = e.pointerType === 'mouse' ? -1 : linkAt(at);
+			press = link >= 0 ? { link, ...at, at: e.timeStamp, moved: false } : null;
+		}
 		onMove(e);
-		press = e.isPrimary && e.pointerType !== 'mouse' && pointed >= 0 ? { link: pointed, ...local(e), moved: false } : null;
 	};
 	const onClick = (e: MouseEvent) => {
 		if (!e.isTrusted || performance.now() > muted || !anchors.includes(e.target as HTMLElement)) return;
@@ -194,14 +204,14 @@ export function mountSky(canvas: HTMLCanvasElement, word = 'birdorbs', links: Sk
 		sky.lift(e.pointerId);
 		if (!e.isPrimary) return;
 		const lifted = pointed;
-		const dragged = press?.moved && press.link === lifted;
+		const unclicked = press?.link === lifted && (press.moved || e.timeStamp - press.at > TAP_HOLD);
 		press = null;
 		pointed = -1;
 		point(null);
 		if (lifted < 0) return;
 		held = lifted;
 		linger = window.setTimeout(letGo, TOUCH_LINGER);
-		if (!dragged) return;
+		if (!unclicked) return;
 		muted = performance.now() + CLICK_MUTE;
 		anchors[lifted].click();
 	};
